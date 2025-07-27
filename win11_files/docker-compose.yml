@@ -1,0 +1,20 @@
+version: '3.8'
+services:
+  postgrest:
+    image: postgrest/postgrest:v12.0.2
+    container_name: postgrest
+    ports:
+      - "3001:3000"  # Keeping your current port mapping (external 3001 -> internal 3000)
+    environment:
+      # Your existing database connection
+      PGRST_DB_URI: postgres://jonesy:H1tchh1ker@192.168.1.31:5432/jobscraps_working
+      PGRST_DB_SCHEMAS: public
+      PGRST_DB_ANON_ROLE: jonesy  # Keeping your existing role
+      PGRST_JWT_SECRET: 7dmSQskIC7kne2tVCOMrgwvjbRKlAhUV
+      
+      # New settings for cross-platform access
+      PGRST_SERVER_HOST: 0.0.0.0  # Allow connections from any IP
+      PGRST_SERVER_PORT: 3000
+      PGRST_SERVER_CORS_ALLOWED_ORIGINS: "*"  # Enable CORS for Mac access
+      
+    restart: unless-stopped

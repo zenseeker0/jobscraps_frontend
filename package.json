@@ -1,0 +1,13 @@
+{
+  "name": "jobscraps-frontend",
+  "version": "1.0.0",
+  "description": "Personal job board frontend for PostgREST",
+  "main": "index.html",
+  "scripts": {
+    "serve": "python3 -m http.server 8080",
+    "serve-php": "php -S localhost:8080",
+    "start": "python3 -m http.server 8080"
+  },
+  "keywords": ["job-board", "postgrest", "frontend"],
+  "author": "jonesy"
+}
