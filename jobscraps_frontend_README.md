@@ -11,8 +11,24 @@ A professional, keyboard-navigable job board interface for browsing and managing
 - **Keyboard navigation** for efficient job scanning
 - **Personal notes** and **filtered CSV export** functionality
 - **SQL-based queries** with custom views for different job subsets
+- **Modular frontend architecture** for easy maintenance and enhancement
 
-### Architecture Diagram
+### Frontend Architecture
+
+```
+jobscraps_frontend/
+├── index.html                 # Clean HTML structure (~90 lines)
+├── config.js                  # API configuration (~25 lines)
+├── css/
+│   └── styles.css            # All styling (~200 lines)
+├── js/
+│   ├── utils.js              # Utility functions (~100 lines)
+│   ├── api.js                # Backend communication (~120 lines)
+│   └── core.js               # Application logic (~280 lines)
+└── README.md                 # This documentation
+```
+
+### System Architecture Diagram
 
 ```mermaid
 graph TB
@@ -29,6 +45,14 @@ graph TB
         
         WEB --> BROWSER
         BROWSER --> LPR
+    end
+    
+    subgraph "Frontend Architecture"
+        BROWSER --> HTML[index.html<br/>Clean Structure]
+        HTML --> CSS[css/styles.css<br/>All Styling]
+        HTML --> UTILS[js/utils.js<br/>Utilities]
+        HTML --> API[js/api.js<br/>API Layer]
+        HTML --> CORE[js/core.js<br/>App Logic]
     end
     
     subgraph "Network Connection"
@@ -51,6 +75,11 @@ graph TB
     style BROWSER fill:#f3e5f5
     style LPR fill:#e8f5e8
     style DPR fill:#fff3e0
+    style HTML fill:#fff9c4
+    style CSS fill:#e8f5e8
+    style UTILS fill:#f3e5f5
+    style API fill:#e1f5fe
+    style CORE fill:#fce4ec
 ```
 
 ### Current Environment Specifications
@@ -59,6 +88,7 @@ graph TB
 - **Database:** PostgreSQL 14.18 with 362,597 total jobs (22,351 visible after filtering), 9 custom views
 - **Smart Filtering:** 93.8% exclusion rate preserves data while showing relevant jobs
 - **Performance:** Complete dataset loaded with acceptable speed and filtered display
+- **Frontend:** Modular architecture with clean separation of concerns
 - **Status:** ✅ **FULLY OPERATIONAL** - All major features working perfectly
 
 ## ✅ Quick Verification Test
@@ -78,51 +108,54 @@ After setup, verify the status update fix is working:
    -- Should show 1 row with your job_id and status='interested'
    ```
 
-## 2. Current Artifacts Reference
+## 2. Frontend File Structure
 
-### Required Artifacts (Copy These Exactly)
-These artifacts contain the working configuration and must be saved exactly as provided:
+### Required Files (Copy These Exactly)
 
-- **`job_board_frontend`** - Main job board interface with status update fix (save as `index.html`)
-- **`config_js`** - API configuration file (save as `config.js`)  
-- **`updated_docker_compose`** - Windows PostgREST Docker setup (save as `docker-compose.yml`)
-- **`sql_setup_jonesy`** - Database views and permissions (run in PostgreSQL)
+#### **Core Files**
+- **`index.html`** - Clean HTML structure with proper script imports
+- **`config.js`** - API configuration (API_BASE setting)
 
-### ✅ Status Update Issue Resolved
-The main troubleshooting issue (job status updates not working) has been **fully resolved**. The updated `job_board_frontend` artifact includes:
-- **Content-Range Detection**: Properly detects when PATCH operations affect 0 rows
-- **Automatic Record Creation**: Creates new metadata records when none exist
-- **User-Visible Feedback**: Success/error messages and loading states
-- **Selection Preservation**: Jobs remain selected after status updates
+#### **CSS Module**
+- **`css/styles.css`** - Complete styling system:
+  - Layout and responsive design
+  - Job table and details panel styling
+  - Status badges and visual indicators
+  - Loading states and animations
 
-### Deprecated/Reference Only
-All other setup and troubleshooting artifacts from our session are deprecated. The system now works with the minimal configuration approach.
+#### **JavaScript Modules**
+- **`js/utils.js`** - Utility functions (no dependencies):
+  - `formatSalary()`, `formatDate()`, `escapeHtml()`
+  - `showMessage()`, `debounce()`, `updateStats()`
 
-## 🎯 Smart Filtering System Overview
+- **`js/api.js`** - Backend communication layer:
+  - `loadJobs()`, `loadJobDetails()`
+  - `updateJobStatus()`, `updateJobNotes()`
+  - `exportCSV()` with error handling
 
-### Filtering Performance Results
+- **`js/core.js`** - Main application logic:
+  - Global state management
+  - Event handlers and keyboard navigation
+  - Job filtering and rendering
+  - Selection management
+
+### ✅ Modular Architecture Benefits
+- **Maintainability**: Each file has <300 lines and clear purpose
+- **Debugging**: Easy to isolate issues by module
+- **Development**: Work on individual features without conflicts
+- **Scalability**: Ready for Phase 4 enhancements
+- **Performance**: Optimized loading with dependency order
+
+### Module Dependencies
 ```
-📊 Current Dataset Performance:
-- Total jobs in database: 362,597
-- Excluded by filters: 340,246 (93.8%)
-- Visible jobs displayed: 22,351
-- Performance: Excellent (complete dataset loaded)
+index.html
+├── config.js (configuration)
+├── css/styles.css (styling)
+└── JavaScript modules (in order):
+    ├── js/utils.js (pure utilities)
+    ├── js/api.js (depends on config.js, uses utils)
+    └── js/core.js (depends on api.js and utils.js)
 ```
-
-### How Smart Filtering Works
-The system uses **exclusion-based filtering** rather than permanent deletion:
-- **Data Preservation**: All 362k jobs remain in the database
-- **Display Filtering**: Only relevant jobs (22k) shown in interface  
-- **Export Accuracy**: CSV export includes only filtered/visible jobs
-- **Reversible**: Filtering rules can be adjusted without data loss
-
-### Filtering Categories Applied
-- **Company patterns**: 48,882 jobs excluded (recruiting firms, etc.)
-- **Title patterns**: 291,877 jobs excluded (irrelevant roles)
-- **ID filters**: 221,125 jobs excluded (duplicate/low-quality postings)
-- **Salary filters**: 123,012 jobs excluded (below minimum thresholds)
-
-The filtering dramatically improves browsing experience while preserving the complete dataset for analysis.
 
 ## 3. Daily Startup Procedure ⭐
 
@@ -175,14 +208,6 @@ curl 'http://127.0.0.1:3001/job_list?limit=1'
 
 Expected result: Job board loads with "Total: 22351" visible jobs displayed (362,597 total in database). All features including status updates and filtered export are fully functional.
 
-## ✅ Status Update Verification
-
-After opening the job board, test the status functionality:
-1. Select any job and change its status
-2. You should see a green success message 
-3. The job status badge should update immediately
-4. Check `SELECT * FROM job_user_metadata;` to confirm database record creation
-
 ## 4. Complete Installation Guide
 
 ### 4.1 Windows 11 Setup (Database Host)
@@ -199,7 +224,20 @@ After opening the job board, test the status functionality:
    ```
 
 2. **Create docker-compose.yml:**
-   Use the exact content from artifact `updated_docker_compose` (connects to `jobscraps` database)
+   ```yaml
+   version: '3.8'
+   services:
+     postgrest:
+       image: postgrest/postgrest:v12.0.2
+       ports:
+         - "3001:3000"
+       environment:
+         PGRST_DB_URI: "postgres://jonesy:H1tchh1ker@host.docker.internal:5432/jobscraps"
+         PGRST_DB_SCHEMAS: "public"
+         PGRST_DB_ANON_ROLE: "jonesy"
+         PGRST_SERVER_CORS_ALLOWED_ORIGINS: "*"
+       restart: unless-stopped
+   ```
 
 3. **Start container:**
    ```powershell
@@ -234,40 +272,136 @@ postgrest --version
 mkdir -p /Users/jonesy/gitlocal/jobscraps_frontend
 cd /Users/jonesy/gitlocal/jobscraps_frontend
 
+# Create directory structure
+mkdir -p css js
+
 # Initialize git (optional)
 git init
 echo ".DS_Store" > .gitignore
 ```
 
-#### Create Configuration Files
-1. **Save artifacts as files:**
-   - `job_board_frontend` → `index.html`
-   - `config_js` → `config.js`
+#### Create Frontend Files
+Create each file with the following content:
 
-2. **Create PostgREST config:**
-   ```bash
-   cat > postgrest.conf << 'EOF'
-   db-uri = "postgres://jonesy:H1tchh1ker@192.168.1.31:5432/jobscraps"
-   db-schemas = "public"
-   db-anon-role = "jonesy"
-   server-host = "127.0.0.1"
-   server-port = 3001
-   server-cors-allowed-origins = "*"
-   EOF
+1. **`index.html`** - Clean HTML structure:
+   ```html
+   <!DOCTYPE html>
+   <html lang="en">
+   <head>
+       <meta charset="UTF-8">
+       <meta name="viewport" content="width=device-width, initial-scale=1.0">
+       <title>SQL Job Board</title>
+       <link rel="stylesheet" href="css/styles.css">
+   </head>
+   <body>
+       <!-- Clean HTML structure -->
+       
+       <!-- JavaScript imports in dependency order -->
+       <script src="config.js"></script>
+       <script src="js/utils.js"></script>
+       <script src="js/api.js"></script>
+       <script src="js/core.js"></script>
+   </body>
+   </html>
    ```
+
+2. **`config.js`** - API configuration:
+   ```javascript
+   const CONFIG = {
+       API_BASE: 'http://127.0.0.1:3001',
+   };
+   
+   const UI_CONFIG = {
+       DEFAULT_PAGE_SIZE: 100,
+       AUTO_REFRESH_INTERVAL: 30000,
+       KEYBOARD_NAVIGATION: true,
+       DEBUG_MODE: false,
+   };
+   ```
+
+3. **`css/styles.css`** - Complete styling system
+4. **`js/utils.js`** - Utility functions module
+5. **`js/api.js`** - API communication module  
+6. **`js/core.js`** - Main application logic module
+
+#### PostgREST Configuration
+```bash
+cat > postgrest.conf << 'EOF'
+db-uri = "postgres://jonesy:H1tchh1ker@192.168.1.31:5432/jobscraps"
+db-schemas = "public"
+db-anon-role = "jonesy"
+server-host = "127.0.0.1"
+server-port = 3001
+server-cors-allowed-origins = "*"
+EOF
+```
 
 ### 4.3 Database Setup (PostgreSQL)
 
 #### Create Required Views and Permissions
-Run the SQL commands from artifact `sql_setup_jonesy` in your PostgreSQL database:
-
 ```sql
--- Connect to jobscraps database and execute all commands
--- This creates 6 essential views:
--- - job_list (main compact view)
--- - job_details (full job information)
--- - jobs_remote_only, jobs_applied, jobs_needs_review, jobs_with_salary
--- - jobs_export (CSV-ready format with filtered data)
+-- Connect to jobscraps database
+\c jobscraps
+
+-- Create main job list view (compact for table display)
+CREATE OR REPLACE VIEW job_list AS
+SELECT 
+    sj.id,
+    sj.title,
+    sj.company,
+    sj.location,
+    sj.date_posted,
+    sj.min_amount,
+    sj.max_amount,
+    sj.currency,
+    sj.is_remote,
+    sj.date_scraped,
+    jum.status,
+    jum.reviewed,
+    jum.user_notes
+FROM scraped_jobs sj
+LEFT JOIN job_user_metadata jum ON sj.id = jum.job_id
+WHERE sj.excluded = false OR sj.excluded IS NULL
+ORDER BY sj.date_scraped DESC;
+
+-- Create detailed job view (for job details panel)
+CREATE OR REPLACE VIEW job_details AS
+SELECT 
+    sj.*,
+    jum.status,
+    jum.reviewed,
+    jum.user_notes,
+    jum.updated_at as status_updated_at
+FROM scraped_jobs sj
+LEFT JOIN job_user_metadata jum ON sj.id = jum.job_id;
+
+-- Create filtered views for different job subsets
+CREATE OR REPLACE VIEW jobs_remote_only AS
+SELECT * FROM job_list WHERE is_remote = true;
+
+CREATE OR REPLACE VIEW jobs_applied AS  
+SELECT * FROM job_list WHERE status = 'applied';
+
+CREATE OR REPLACE VIEW jobs_needs_review AS
+SELECT * FROM job_list WHERE reviewed = false OR reviewed IS NULL;
+
+CREATE OR REPLACE VIEW jobs_with_salary AS
+SELECT * FROM job_list WHERE min_amount IS NOT NULL;
+
+-- Create export view (CSV-ready format)
+CREATE OR REPLACE VIEW jobs_export AS
+SELECT 
+    id, title, company, location, date_posted,
+    min_amount, max_amount, currency, is_remote,
+    status, reviewed, user_notes, date_scraped,
+    job_url, job_url_direct, description, skills,
+    company_industry, job_type, job_level
+FROM job_details
+WHERE excluded = false OR excluded IS NULL;
+
+-- Grant permissions
+GRANT SELECT ON ALL TABLES IN SCHEMA public TO jonesy;
+GRANT SELECT, INSERT, UPDATE, DELETE ON job_user_metadata TO jonesy;
 ```
 
 #### Verify Setup
@@ -278,7 +412,13 @@ FROM information_schema.tables
 WHERE table_schema = 'public' 
 AND table_name LIKE '%job%';
 
--- Expected: 9 tables/views including job_list, job_details, etc.
+-- Test job_list view
+SELECT COUNT(*) FROM job_list;
+-- Expected: ~22,351 visible jobs
+
+-- Test job_details view  
+SELECT COUNT(*) FROM job_details;
+-- Expected: 362,597 total jobs
 ```
 
 ## 5. Job Status Management System
@@ -290,7 +430,7 @@ flowchart TD
     A[User Browses Jobs] --> B[Select Job in Table]
     B --> C[Job Details Load in Right Panel]
     C --> D[User Changes Status Dropdown]
-    D --> E[JavaScript updateJobStatus Function]
+    D --> E[core.js → api.js updateJobStatus]
     
     E --> F{Metadata Record Exists?}
     F -->|Yes| G[PATCH /job_user_metadata]
@@ -302,59 +442,62 @@ flowchart TD
     I --> K[PostgREST Returns Success]
     J --> K
     
-    K --> L[Update Local JavaScript Data]
-    L --> M[Re-render Job Table Row]
-    L --> N[Update Status Badge Color]
-    L --> O[Refresh Stats Counter]
+    K --> L[api.js Updates Local Data]
+    L --> M[core.js Re-renders Job Table]
+    L --> N[utils.js Updates Status Badge]
+    L --> O[utils.js Refreshes Stats]
     
     M --> P[Status Badge Shows New Value]
     N --> P
     O --> Q[Header Shows Updated Counts]
     
     style A fill:#e1f5fe
+    style E fill:#fce4ec
+    style L fill:#e1f5fe
+    style M fill:#fce4ec
+    style N fill:#fff9c4
+    style O fill:#fff9c4
     style P fill:#c8e6c9
     style Q fill:#c8e6c9
 ```
 
-### 5.2 Data Flow for Status Updates
+### 5.2 Module Interaction for Status Updates
 
 ```mermaid
 sequenceDiagram
-    participant UI as Job Board UI
-    participant JS as JavaScript
-    participant API as PostgREST API
+    participant UI as User Interface
+    participant CORE as core.js
+    participant API as api.js
+    participant UTILS as utils.js
+    participant REST as PostgREST
     participant DB as PostgreSQL
     
-    UI->>JS: User selects status from dropdown
-    JS->>JS: Capture job_id and new status
+    UI->>CORE: User selects status from dropdown
+    CORE->>API: updateJobStatus(jobId, status)
     
-    JS->>API: PATCH /job_user_metadata?job_id=eq.ABC123
-    Note over JS,API: Body: {"status": "interested", "reviewed": true}
-    
-    API->>DB: UPDATE job_user_metadata SET status='interested', reviewed=true WHERE job_id='ABC123'
+    API->>REST: PATCH /job_user_metadata?job_id=eq.ABC123
+    REST->>DB: UPDATE job_user_metadata SET status='interested'
     
     alt Record exists
-        DB->>API: UPDATE successful (1+ rows affected)
-        API->>JS: 204 No Content + Content-Range: 0-0/*
-        Note over JS: Status updated successfully
+        DB->>REST: UPDATE successful (1+ rows affected)
+        REST->>API: 204 No Content + Content-Range: 0-0/*
     else Record doesn't exist  
-        DB->>API: UPDATE successful (0 rows affected)
-        API->>JS: 204 No Content + Content-Range: */*
-        Note over JS: Content-Range */* detected - no rows updated
+        DB->>REST: UPDATE successful (0 rows affected)
+        REST->>API: 204 No Content + Content-Range: */*
         
-        JS->>API: POST /job_user_metadata
-        Note over JS,API: Body: {"job_id": "ABC123", "status": "interested", "reviewed": true}
-        API->>DB: INSERT INTO job_user_metadata (job_id, status, reviewed) VALUES (...)
-        DB->>API: INSERT successful
-        API->>JS: 201 Created
+        API->>REST: POST /job_user_metadata
+        REST->>DB: INSERT INTO job_user_metadata
+        DB->>REST: INSERT successful
+        REST->>API: 201 Created
     end
     
-    JS->>JS: Update local allJobs array
-    JS->>UI: Re-render table row with new status badge
-    JS->>UI: Update stats counters in header
-    JS->>UI: Show success message
+    API->>API: Update allJobs array (local data)
+    API->>CORE: filterJobs(false) - preserve selection
+    CORE->>CORE: renderJobs() - re-render table
+    API->>UTILS: showMessage('Status updated', 'success')
+    UTILS->>UI: Display success message
     
-    Note over UI: Status badge color changes:<br/>- interested: blue<br/>- applied: green<br/>- followed-up: yellow<br/>- rejected: red
+    Note over CORE: Job remains selected,<br/>status badge updates color
 ```
 
 ### 5.3 Status Impact Analysis
@@ -366,6 +509,12 @@ sequenceDiagram
 - **`rejected`** - Not moving forward (red badge)
 - **`unreviewed`** - No status set (gray badge)
 
+#### Module Responsibilities
+- **`api.js`**: Handles HTTP requests and error handling
+- **`core.js`**: Manages application state and UI updates
+- **`utils.js`**: Provides formatting and messaging utilities
+- **`styles.css`**: Defines status badge colors and animations
+
 #### Database Schema Changes
 ```sql
 -- When status is updated, these fields change in job_user_metadata:
@@ -375,19 +524,6 @@ reviewed        -- Set to TRUE automatically
 updated_at      -- Timestamp updated automatically
 user_notes      -- Preserved (unchanged)
 ```
-
-#### UI Behavior Changes
-1. **Table Row:** Status badge color and text update immediately
-2. **Details Panel:** Status dropdown shows selected value
-3. **Header Stats:** Counters update (Total: X, Selected: Y of Z)
-4. **Filtering:** Job appears/disappears based on status filter
-5. **Export:** Status included in CSV export data
-
-#### Query View Effects
-- **jobs_applied:** Job appears when status = 'applied'
-- **jobs_needs_review:** Job disappears when reviewed = true
-- **job_list:** Shows updated status in all views
-- **jobs_export:** Includes status for CSV export
 
 ## 6. Usage Guide & Features
 
@@ -482,54 +618,6 @@ curl 'http://127.0.0.1:3001/jobs_export?status=eq.applied' \
   -H "Accept: text/csv" > applied_jobs.csv
 ```
 
-### 7.3 Managing Filtering Rules
-
-The system includes an `apply-filtering-rules` command for managing job visibility:
-
-```sql
--- View current filtering statistics
-SELECT 
-  COUNT(*) as total_jobs,
-  COUNT(*) FILTER (WHERE excluded = true) as excluded_jobs,
-  COUNT(*) FILTER (WHERE excluded = false OR excluded IS NULL) as visible_jobs
-FROM scraped_jobs;
-
--- The filtering system automatically excludes jobs based on:
--- 1. Company patterns (recruiting firms, unwanted companies)
--- 2. Title patterns (irrelevant job titles)  
--- 3. ID filters (duplicate or low-quality postings)
--- 4. Salary filters (below minimum thresholds)
-```
-
-#### Filtering Benefits
-- **Performance**: Interface loads 22k jobs instead of 362k
-- **Relevance**: Shows only pertinent opportunities
-- **Preservation**: No data loss - all jobs remain in database
-- **Flexibility**: Rules can be adjusted without losing historical data
-
-### 7.4 Adding Custom Views
-
-To add new SQL views (they automatically become API endpoints):
-
-```sql
--- Example: High-paying remote Python jobs
-CREATE OR REPLACE VIEW jobs_python_remote_high_pay AS
-SELECT * FROM job_list 
-WHERE skills ILIKE '%python%' 
-  AND is_remote = true 
-  AND min_amount >= 120000;
-
-GRANT SELECT ON jobs_python_remote_high_pay TO jonesy;
-
--- Restart PostgREST to recognize new view
--- Now available at: GET /jobs_python_remote_high_pay
-```
-
-Then add to frontend dropdown:
-```html
-<option value="jobs_python_remote_high_pay">High-Pay Python Remote</option>
-```
-
 ## 8. Troubleshooting Guide
 
 ### 8.1 ✅ Resolved Issues
@@ -539,7 +627,7 @@ Then add to frontend dropdown:
 
 **Root Cause**: PostgREST returns `204 No Content` with `Content-Range: */*` when PATCH operations affect 0 rows, but frontend only created new records on `404` responses.
 
-**Resolution**: Updated frontend to check `Content-Range` header and create new records when `*/*` is returned.
+**Resolution**: Updated `api.js` to check `Content-Range` header and create new records when `*/*` is returned.
 
 **Verification**: 
 1. Change a job status and check for success message
@@ -580,25 +668,52 @@ Then add to frontend dropdown:
    ```
 
 #### Browser Shows Blank Job Board
-**Cause:** HTTP server not running or wrong port
+**Cause:** HTTP server not running, wrong port, or missing files
 
 **Solutions:**
-1. **Check HTTP server:**
+1. **Check file structure:**
+   ```bash
+   ls -la /Users/jonesy/gitlocal/jobscraps_frontend/
+   # Should show: index.html, config.js, css/, js/
+   ```
+
+2. **Check HTTP server:**
    ```bash
    # Should show process on port 8080
    lsof -i :8080
    ```
 
-2. **Restart HTTP server:**
+3. **Restart HTTP server:**
    ```bash
    cd /Users/jonesy/gitlocal/jobscraps_frontend
    python3 -m http.server 8080
    ```
 
-3. **Check config.js API_BASE setting:**
+4. **Check config.js API_BASE setting:**
    ```javascript
    // Should be:
-   API_BASE: 'http://127.0.0.1:3001'
+   const CONFIG = {
+       API_BASE: 'http://127.0.0.1:3001'
+   };
+   ```
+
+#### JavaScript Console Errors
+**Cause:** Missing files or incorrect module loading order
+
+**Solutions:**
+1. **Check browser console (F12)** for error messages
+2. **Verify file loading order** in index.html:
+   ```html
+   <!-- Correct order -->
+   <script src="config.js"></script>
+   <script src="js/utils.js"></script>
+   <script src="js/api.js"></script>
+   <script src="js/core.js"></script>
+   ```
+
+3. **Check file permissions:**
+   ```bash
+   chmod 644 index.html config.js css/styles.css js/*.js
    ```
 
 ### 8.3 Network Connectivity Issues
@@ -644,23 +759,51 @@ Then add to frontend dropdown:
    docker exec postgrest env | grep PGRST
    ```
 
-## 9. Customization Options
+## 9. Customization & Development
 
-### 9.1 Adding New Status Types
+### 9.1 Adding New Features
 
-1. **Update status dropdown in index.html:**
-   ```html
-   <option value="interview">Interview Scheduled</option>
-   <option value="offer">Offer Received</option>
-   ```
+#### Module-Specific Changes
 
-2. **Add CSS for new status badges:**
-   ```css
-   .status-interview { background: #e3f2fd; color: #1976d2; }
-   .status-offer { background: #f3e5f5; color: #7b1fa2; }
-   ```
+**For UI Changes (`css/styles.css`):**
+```css
+/* Add new status colors */
+.status-interview { background: #e3f2fd; color: #1976d2; }
+.status-offer { background: #f3e5f5; color: #7b1fa2; }
 
-### 9.2 Custom Job Queries
+/* Custom company highlighting */
+.job-company[data-company="Google"] { color: #4285f4; font-weight: bold; }
+```
+
+**For Utility Functions (`js/utils.js`):**
+```javascript
+// Add new formatting function
+function formatCompanySize(employees) {
+    if (employees < 50) return 'Startup';
+    if (employees < 1000) return 'Mid-size';
+    return 'Enterprise';
+}
+```
+
+**For API Features (`js/api.js`):**
+```javascript
+// Add new API endpoint function
+async function bulkUpdateStatus(jobIds, status) {
+    // Implementation for bulk status updates
+}
+```
+
+**For App Logic (`js/core.js`):**
+```javascript
+// Add new keyboard shortcuts
+case 'i': // Mark as interested
+    if (selectedJobId) {
+        updateJobStatus(selectedJobId, 'interested');
+    }
+    break;
+```
+
+### 9.2 Adding Custom Views
 
 Create specialized views for your workflow:
 
@@ -681,64 +824,129 @@ CREATE VIEW jobs_action_required AS
 SELECT * FROM job_list 
 WHERE status IN ('interested', 'interview')
   AND updated_at <= NOW() - INTERVAL '3 days';
+
+-- Grant permissions
+GRANT SELECT ON jobs_target_companies TO jonesy;
+GRANT SELECT ON jobs_recent_high_value TO jonesy;
+GRANT SELECT ON jobs_action_required TO jonesy;
 ```
 
-### 9.3 Frontend Modifications
+Then add to frontend dropdown in `index.html`:
+```html
+<option value="jobs_target_companies">Target Companies</option>
+<option value="jobs_recent_high_value">Recent High-Value</option>
+<option value="jobs_action_required">Action Required</option>
+```
 
-#### Change Table Columns
-Edit the table header and row rendering in `index.html`:
+### 9.3 Frontend Debugging
 
+#### Module Debugging Techniques
+
+**Check Module Loading:**
 ```javascript
-// Add new column to table
-<th>Skills</th>
-
-// Add corresponding cell data
-<td>${escapeHtml(job.skills || '')}</td>
+// Add to browser console
+console.log('Config loaded:', typeof CONFIG !== 'undefined');
+console.log('Utils loaded:', typeof formatSalary !== 'undefined');
+console.log('API loaded:', typeof loadJobs !== 'undefined');
+console.log('Core loaded:', typeof allJobs !== 'undefined');
 ```
 
-#### Modify Keyboard Shortcuts
-Add new key handlers in `handleKeyPress` function:
-
+**Enable Debug Mode:**
 ```javascript
-case 'i': // Mark as interested
-    if (selectedJobId) {
-        updateJobStatus(selectedJobId, 'interested');
-    }
-    break;
+// In config.js
+const UI_CONFIG = {
+    DEBUG_MODE: true,  // Enable verbose logging
+    // ...
+};
 ```
 
-#### Custom Styling
-Add your own CSS overrides to the `<style>` section for:
-- Color schemes
-- Typography
-- Layout adjustments
-- Company-specific highlighting
+**API Call Debugging:**
+```javascript
+// In js/api.js, add logging
+console.log('API Request:', url, options);
+console.log('API Response:', response);
+```
+
+#### Performance Monitoring
+
+**Check Module Load Times:**
+```javascript
+// Add timing to each module
+console.time('Utils module load');
+// ... utils.js content
+console.timeEnd('Utils module load');
+```
+
+**Monitor API Performance:**
+```javascript
+// In js/api.js
+const startTime = performance.now();
+const response = await fetch(url);
+console.log(`API call took ${performance.now() - startTime}ms`);
+```
+
+## 🎯 Smart Filtering System Overview
+
+### Filtering Performance Results
+```
+📊 Current Dataset Performance:
+- Total jobs in database: 362,597
+- Excluded by filters: 340,246 (93.8%)
+- Visible jobs displayed: 22,351
+- Performance: Excellent (complete dataset loaded)
+- Frontend modules: 5 files, ~800 total lines
+```
+
+### How Smart Filtering Works
+The system uses **exclusion-based filtering** rather than permanent deletion:
+- **Data Preservation**: All 362k jobs remain in the database
+- **Display Filtering**: Only relevant jobs (22k) shown in interface  
+- **Export Accuracy**: CSV export includes only filtered/visible jobs
+- **Reversible**: Filtering rules can be adjusted without data loss
+- **Modular Frontend**: Clean separation of concerns for easy maintenance
+
+### Filtering Categories Applied
+- **Company patterns**: 48,882 jobs excluded (recruiting firms, etc.)
+- **Title patterns**: 291,877 jobs excluded (irrelevant roles)
+- **ID filters**: 221,125 jobs excluded (duplicate/low-quality postings)
+- **Salary filters**: 123,012 jobs excluded (below minimum thresholds)
+
+The filtering dramatically improves browsing experience while preserving the complete dataset for analysis.
 
 ---
 
 ## 🎉 Success Metrics
 
-Your job board is successfully managing:
+Your modular job board is successfully managing:
 - **362,597 total jobs** in database from your scraping system
 - **22,351 visible jobs** after smart filtering (93.8% exclusion rate)
 - **9 custom SQL views** for different job subsets  
+- **5 modular frontend files** with clean separation of concerns
 - **Smart filtering system** that preserves data while showing relevant jobs
 - **Keyboard-driven navigation** for efficient browsing
 - **✅ Full status tracking** with notes capability (WORKING)
 - **✅ Filtered CSV export** for external analysis (exports only visible jobs)
 - **Real-time filtering** and search functionality
-- **Professional interface** with excellent performance
+- **Professional modular architecture** ready for Phase 4 enhancements
 
 ## ✅ System Status: FULLY OPERATIONAL
 
-The system provides a professional interface for managing your job search workflow with the performance and flexibility of direct SQL access through PostgREST.
+The system provides a professional modular interface for managing your job search workflow with the performance and flexibility of direct SQL access through PostgREST.
+
+### Modular Architecture Benefits:
+- **Maintainability**: ✅ Each file <300 lines with clear purpose
+- **Debugging**: ✅ Easy to isolate issues by module
+- **Development**: ✅ Work on individual features without conflicts  
+- **Scalability**: ✅ Ready for Phase 4 workflow enhancements
+- **Performance**: ✅ Optimized loading with proper dependency order
 
 ### Recent Fixes Applied:
-- **Status Update Bug**: ✅ RESOLVED - Content-Range header detection implemented
-- **Selection Preservation**: ✅ Jobs remain selected after status updates  
-- **User Feedback**: ✅ Success/error messages added
-- **Loading States**: ✅ Visual feedback during updates
-- **Race Condition Prevention**: ✅ Concurrent update protection added
+- **Status Update Bug**: ✅ RESOLVED - Content-Range header detection in api.js
+- **Selection Preservation**: ✅ Jobs remain selected after status updates in core.js
+- **User Feedback**: ✅ Success/error messages in utils.js
+- **Loading States**: ✅ Visual feedback during updates in styles.css
+- **Race Condition Prevention**: ✅ Concurrent update protection in api.js
+- **Modular Refactor**: ✅ COMPLETED - Clean 5-file architecture
 
 ### Verified Working Features:
 - ✅ Job browsing and navigation (keyboard + mouse)
@@ -748,4 +956,5 @@ The system provides a professional interface for managing your job search workfl
 - ✅ Real-time search and filtering
 - ✅ Database record creation and updates
 - ✅ Smart filtering system (362k→22k jobs)
-- ✅ Professional interface with excellent performance
+- ✅ Professional modular interface with excellent performance
+- ✅ Phase 4 enhancement readiness
