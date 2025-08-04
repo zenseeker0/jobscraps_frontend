@@ -3,17 +3,18 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SQL Job Board</title>
+    <title>SQL Job Board - Phase 4 Enhanced</title>
     <link rel="stylesheet" href="css/styles.css">
 </head>
 <body>
     <div class="container">
         <div class="header">
             <div class="header-top">
-                <h1>SQL Job Board</h1>
+                <h1>SQL Job Board - Phase 4 Enhanced</h1>
                 <div class="stats">
                     <span>Total: <strong id="totalJobs">0</strong></span>
                     <span>Selected: <strong id="selectedIndex">0</strong> of <strong id="filteredTotal">0</strong></span>
+                    <button onclick="showShortcutHelp()" title="Show keyboard shortcuts" style="padding: 4px 8px; font-size: 12px;">❓ Help</button>
                 </div>
             </div>
             
@@ -31,7 +32,8 @@
                 
                 <div class="control-group">
                     <label>Search:</label>
-                    <input type="text" id="searchInput" placeholder="Title, company..." />
+                    <input type="text" id="searchInput" placeholder="Title, company, or job ID..." />
+                    <small style="color: #6b7280; font-size: 11px;">Tip: Paste full job ID for direct lookup</small>
                 </div>
                 
                 <div class="control-group">
@@ -42,15 +44,19 @@
                         <option value="applied">Applied</option>
                         <option value="followed-up">Followed Up</option>
                         <option value="rejected">Rejected</option>
+                        <option value="irrelevant">Irrelevant</option>
                         <option value="unreviewed">Unreviewed</option>
                     </select>
                 </div>
                 
                 <button class="export-btn" onclick="exportCSV()">📄 Export CSV</button>
-                <span class="keyboard-hint">Use ↑↓ arrow keys to navigate</span>
+                <button class="analytics-btn" onclick="exportSessionAnalytics()" style="background: #8b5cf6;">📊 Analytics</button>
+                <span class="keyboard-hint">Press ? for keyboard shortcuts | Use ↑↓ to navigate</span>
             </div>
             
             <div id="messageContainer"></div>
+            
+            <!-- Phase 4: Workflow control panel will be inserted here by JavaScript -->
         </div>
         
         <div class="main-content">
@@ -59,6 +65,9 @@
                     <table class="jobs-table">
                         <thead>
                             <tr>
+                                <th style="width: 40px;">
+                                    <input type="checkbox" id="selectAllVisible" onchange="toggleAllVisible()" title="Select all visible jobs">
+                                </th>
                                 <th>Title</th>
                                 <th>Company</th>
                                 <th>Location</th>
@@ -68,7 +77,7 @@
                             </tr>
                         </thead>
                         <tbody id="jobsTableBody">
-                            <tr><td colspan="6" class="loading">Loading jobs...</td></tr>
+                            <tr><td colspan="7" class="loading">Loading jobs...</td></tr>
                         </tbody>
                     </table>
                 </div>
@@ -77,6 +86,9 @@
             <div class="details-panel" id="detailsPanel">
                 <div class="no-selection">
                     ← Select a job to view details
+                    <div style="margin-top: 10px; font-size: 12px; color: #9ca3af;">
+                        Keyboard shortcuts: 1-5 for status, Space for next job, ? for help
+                    </div>
                 </div>
             </div>
         </div>
@@ -86,6 +98,126 @@
     <script src="config.js"></script>
     <script src="js/utils.js"></script>
     <script src="js/api.js"></script>
-    <script src="js/core.js"></script>
+    <script src="js/core_new.js"></script>
+    
+    <script>
+        // Phase 4: Additional utility functions for bulk operations
+        function toggleAllVisible() {
+            const selectAllCheckbox = document.getElementById('selectAllVisible');
+            const visibleJobs = filteredJobs.slice(0, UI_CONFIG.MAX_VISIBLE_JOBS);
+            
+            if (selectAllCheckbox.checked) {
+                // Select all visible jobs (respecting limits)
+                const remainingCapacity = jobSelection.maxSelection - jobSelection.selectedJobs.size;
+                const jobsToSelect = visibleJobs.slice(0, remainingCapacity);
+                
+                jobsToSelect.forEach(job => {
+                    jobSelection.selectedJobs.add(job.id);
+                });
+                
+                if (jobsToSelect.length < visibleJobs.length) {
+                    showMessage(
+                        `Selected ${jobsToSelect.length} of ${visibleJobs.length} visible jobs (selection limit: ${jobSelection.maxSelection})`,
+                        'warning'
+                    );
+                }
+            } else {
+                // Deselect all visible jobs
+                visibleJobs.forEach(job => {
+                    jobSelection.selectedJobs.delete(job.id);
+                });
+            }
+            
+            updateBulkSelectionUI();
+        }
+        
+        // Phase 4: Export selected jobs
+        async function bulkExportSelected() {
+            if (jobSelection.selectedJobs.size === 0) {
+                showMessage('No jobs selected for export', 'warning');
+                return;
+            }
+            
+            try {
+                await exportSelected();
+            } catch (error) {
+                showMessage('Failed to export selected jobs', 'error');
+            }
+        }
+        
+        // Phase 4: Global error handler for unhandled promise rejections
+        window.addEventListener('unhandledrejection', function(event) {
+            console.error('Unhandled promise rejection:', event.reason);
+            showMessage('An unexpected error occurred. Check console for details.', 'error');
+            
+            if (typeof workflowAnalytics !== 'undefined') {
+                workflowAnalytics.session.metrics.errorCount++;
+            }
+        });
+        
+        // Phase 4: Global error handler for JavaScript errors
+        window.addEventListener('error', function(event) {
+            console.error('JavaScript error:', event.error);
+            showMessage('A JavaScript error occurred. Check console for details.', 'error');
+            
+            if (typeof workflowAnalytics !== 'undefined') {
+                workflowAnalytics.session.metrics.errorCount++;
+            }
+        });
+        
+        // Phase 4: Page visibility change handler (pause analytics when tab not visible)
+        document.addEventListener('visibilitychange', function() {
+            if (typeof workflowAnalytics !== 'undefined') {
+                if (document.hidden) {
+                    // Pause workflow timing when tab is hidden
+                    workflowAnalytics.session.lastPauseTime = Date.now();
+                } else {
+                    // Resume workflow timing
+                    if (workflowAnalytics.session.lastPauseTime) {
+                        const pauseDuration = Date.now() - workflowAnalytics.session.lastPauseTime;
+                        workflowAnalytics.session.startTime += pauseDuration;
+                        workflowAnalytics.session.modeStartTime += pauseDuration;
+                        delete workflowAnalytics.session.lastPauseTime;
+                    }
+                }
+            }
+        });
+        
+        // Phase 4: Performance monitoring for large datasets
+        function monitorPerformance() {
+            if (typeof workflowAnalytics === 'undefined') return;
+            
+            const memory = getMemoryUsage();
+            if (memory && memory.used > memory.limit * 0.8) {
+                showMessage(
+                    `⚠️ High memory usage detected (${memory.used}MB). Consider refreshing the page or using more specific filters.`,
+                    'warning', 10000
+                );
+            }
+            
+            // Monitor for slow operations
+            const metrics = workflowAnalytics.session.performanceMetrics || [];
+            const recentMetrics = metrics.filter(m => Date.now() - m.timestamp < 60000); // Last minute
+            const avgDuration = recentMetrics.reduce((sum, m) => sum + m.duration, 0) / recentMetrics.length;
+            
+            if (avgDuration > 5000) { // Operations taking longer than 5 seconds
+                showMessage(
+                    `⚠️ Operations are running slowly. Consider using filters to reduce dataset size.`,
+                    'warning', 8000
+                );
+            }
+        }
+        
+        // Monitor performance every 30 seconds
+        setInterval(monitorPerformance, 30000);
+        
+        // Phase 4: Session analytics summary on page unload
+        window.addEventListener('beforeunload', function() {
+            if (typeof workflowAnalytics !== 'undefined' && UI_CONFIG.DEBUG_MODE) {
+                const summary = getSessionSummary();
+                console.log('Session Summary:', summary);
+            }
+        });
+    </script>
 </body>
 </html>

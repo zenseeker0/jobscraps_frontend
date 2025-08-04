@@ -1,40 +1,123 @@
-// API layer - all backend communication
-
-const API_BASE = CONFIG.API_BASE;
+// API layer - Enhanced with better error handling and timeouts
+// FIXED: Resolved timeout and JSON parsing issues
 
 async function loadJobs() {
     const query = document.getElementById('querySelect').value;
     
     try {
-        const response = await fetch(`${API_BASE}/${query}?order=date_scraped.desc`);
-        const data = await response.json();
+        const loadingSpinner = showLoadingSpinner('Loading jobs from database...');
+        const startTime = performance.now();
         
-        // Ensure we have an array
+        // Add reasonable limits to prevent 674 MB downloads!
+        const limit = UI_CONFIG.MAX_VISIBLE_JOBS || 5000;
+        const url = `${CONFIG.API_BASE}/${query}?order=date_scraped.desc&limit=${limit}`;
+        
+        console.log(`🔄 Loading jobs from: ${url}`);
+        
+        const response = await fetch(url);
+        
+        console.log('Response status:', response.status);
+        console.log('Response ok:', response.ok);
+        console.log('Response headers:', [...response.headers.entries()]);
+        
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+        
+        // Get response text first to debug
+        const responseText = await response.text();
+        console.log(`📊 Response length: ${responseText.length} chars`);
+        console.log('First 200 chars:', responseText.substring(0, 200));
+        
+        let data;
+        if (responseText.length === 0) {
+            throw new Error('Empty response from server');
+        }
+        
+        try {
+            data = JSON.parse(responseText);
+        } catch (jsonError) {
+            console.error('JSON Parse Error:', jsonError);
+            console.error('Response text sample:', responseText.substring(0, 1000));
+            throw new Error(`Invalid JSON response: ${jsonError.message}`);
+        }
+        
+        const loadTime = performance.now() - startTime;
+        hideLoadingSpinner();
+        
+        logPerformanceMetrics('loadJobs', loadTime, {
+            query: query,
+            jobCount: Array.isArray(data) ? data.length : 1,
+            responseSize: responseText.length,
+            requestedLimit: limit
+        });
+        
         if (Array.isArray(data)) {
+            console.log(`✅ Successfully loaded ${data.length} jobs (limit: ${limit})`);
+            
+            // Show info about the dataset size
+            showMessage(
+                `📊 Loaded ${formatLargeNumber(data.length)} jobs. ` +
+                `This is a limited view for performance. Use filters to find specific jobs.`,
+                'info', 6000
+            );
+            
             return data;
         } else {
             console.error('API returned non-array data:', data);
             throw new Error('API returned unexpected data format');
         }
     } catch (error) {
+        hideLoadingSpinner();
         console.error('Error loading jobs:', error);
+        showMessage(`Failed to load jobs: ${error.message}`, 'error');
         throw error;
     }
 }
 
 async function loadJobDetails(jobId) {
     try {
-        const response = await fetch(`${API_BASE}/job_details?id=eq.${jobId}`);
+        const startTime = performance.now();
+        
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+        
+        const response = await fetch(`${CONFIG.API_BASE}/job_details?id=eq.${jobId}`, {
+            signal: controller.signal,
+            headers: {
+                'Accept': 'application/json',
+                'Content-Type': 'application/json'
+            }
+        });
+        
+        clearTimeout(timeoutId);
+        
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+        
         const details = await response.json();
+        
+        const loadTime = performance.now() - startTime;
+        logPerformanceMetrics('loadJobDetails', loadTime, {
+            jobId: jobId,
+            detailsSize: JSON.stringify(details[0] || {}).length
+        });
+        
         return details.length > 0 ? details[0] : null;
     } catch (error) {
-        console.error('Error loading job details:', error);
+        if (error.name === 'AbortError') {
+            console.error('Job details request timed out');
+            showMessage('Job details request timed out', 'error');
+        } else {
+            console.error('Error loading job details:', error);
+        }
         throw error;
     }
 }
 
 async function updateJobStatus(jobId, status) {
-    if (isUpdating) return; // Prevent concurrent updates
+    if (isUpdating) return;
     
     isUpdating = true;
     const statusSelect = document.querySelector('.status-select');
@@ -44,21 +127,43 @@ async function updateJobStatus(jobId, status) {
     }
     
     try {
-        const response = await fetch(`${API_BASE}/job_user_metadata?job_id=eq.${jobId}`, {
+        const startTime = performance.now();
+        
+        // Enhanced: Handle exclusion fields atomically when status is "irrelevant"
+        const updateData = { status, reviewed: true };
+        
+        if (status === 'irrelevant') {
+            updateData.excluded = true;
+            updateData.exclusion_reason = 'irrelevant';
+            updateData.exclusion_sources = JSON.stringify(['manual']);
+            updateData.exclusion_applied_at = new Date().toISOString();
+        } else if (status && status !== 'irrelevant') {
+            updateData.excluded = false;
+            updateData.exclusion_reason = null;
+            updateData.exclusion_sources = JSON.stringify([]);
+            updateData.exclusion_applied_at = null;
+        }
+        
+        const response = await fetch(`${CONFIG.API_BASE}/job_user_metadata?job_id=eq.${jobId}`, {
             method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ status, reviewed: true })
+            headers: { 
+                'Content-Type': 'application/json',
+                'Accept': 'application/json'
+            },
+            body: JSON.stringify(updateData)
         });
         
-        // Check if any rows were actually updated
         const contentRange = response.headers.get('Content-Range');
         const noRowsUpdated = contentRange === '*/*' || contentRange === '*/0';
         
         if (response.status === 404 || noRowsUpdated) {
-            const createResponse = await fetch(`${API_BASE}/job_user_metadata`, {
+            const createResponse = await fetch(`${CONFIG.API_BASE}/job_user_metadata`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ job_id: jobId, status, reviewed: true })
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json'
+                },
+                body: JSON.stringify({ job_id: jobId, ...updateData })
             });
             
             if (!createResponse.ok) {
@@ -66,22 +171,42 @@ async function updateJobStatus(jobId, status) {
             }
         }
         
-        // Update local data
+        const updateTime = performance.now() - startTime;
+        logPerformanceMetrics('updateJobStatus', updateTime, {
+            jobId: jobId,
+            status: status,
+            operation: noRowsUpdated ? 'create' : 'update',
+            excludedFields: status === 'irrelevant'
+        });
+        
+        // Update local data with all fields
         const job = allJobs.find(j => j.id === jobId);
         if (job) {
             job.status = status;
             job.reviewed = true;
+            if (status === 'irrelevant') {
+                job.excluded = true;
+                job.exclusion_reason = 'irrelevant';
+                job.exclusion_sources = ['manual'];
+            } else {
+                job.excluded = false;
+                job.exclusion_reason = null;
+                job.exclusion_sources = [];
+            }
         }
         
-        // Re-render table without resetting selection
         filterJobs(false);
-        showMessage(`Status updated to "${status}"`, 'success', 2000);
+        
+        let message = `Status updated to "${status}"`;
+        if (status === 'irrelevant') {
+            message += ' (marked as excluded)';
+        }
+        showMessage(message, 'success', 2000);
         
     } catch (error) {
         console.error('Error updating status:', error);
         showMessage(`Failed to update status: ${error.message}`, 'error');
         
-        // Reset the dropdown to previous value
         if (statusSelect) {
             const job = allJobs.find(j => j.id === jobId);
             statusSelect.value = job?.status || '';
@@ -95,8 +220,74 @@ async function updateJobStatus(jobId, status) {
     }
 }
 
+// Company metadata functions
+async function loadCompanyMetadata(companyName) {
+    try {
+        const response = await fetch(`${CONFIG.API_BASE}/company_user_metadata?company_name=eq.${encodeURIComponent(companyName)}`, {
+            headers: {
+                'Accept': 'application/json',
+                'Content-Type': 'application/json'
+            }
+        });
+        
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+        
+        const data = await response.json();
+        return data.length > 0 ? data[0] : null;
+    } catch (error) {
+        console.error('Error loading company metadata:', error);
+        return null;
+    }
+}
+
+async function updateCompanyMetadata(companyName, metadata) {
+    try {
+        const response = await fetch(`${CONFIG.API_BASE}/company_user_metadata?company_name=eq.${encodeURIComponent(companyName)}`, {
+            method: 'PATCH',
+            headers: { 
+                'Content-Type': 'application/json',
+                'Accept': 'application/json'
+            },
+            body: JSON.stringify({
+                ...metadata,
+                updated_at: new Date().toISOString()
+            })
+        });
+        
+        const contentRange = response.headers.get('Content-Range');
+        const noRowsUpdated = contentRange === '*/*' || contentRange === '*/0';
+        
+        if (response.status === 404 || noRowsUpdated) {
+            const createResponse = await fetch(`${CONFIG.API_BASE}/company_user_metadata`, {
+                method: 'POST',
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json'
+                },
+                body: JSON.stringify({
+                    company_name: companyName,
+                    ...metadata,
+                    created_at: new Date().toISOString(),
+                    updated_at: new Date().toISOString()
+                })
+            });
+            
+            if (!createResponse.ok) {
+                throw new Error(`Failed to create company record: ${createResponse.status}`);
+            }
+        }
+        
+        return true;
+    } catch (error) {
+        console.error('Error updating company metadata:', error);
+        throw error;
+    }
+}
+
 async function updateJobNotes(jobId, notes) {
-    if (isUpdating) return; // Prevent concurrent updates
+    if (isUpdating) return;
     
     isUpdating = true;
     const notesInput = document.querySelector('.notes-input');
@@ -106,20 +297,27 @@ async function updateJobNotes(jobId, notes) {
     }
     
     try {
-        const response = await fetch(`${API_BASE}/job_user_metadata?job_id=eq.${jobId}`, {
+        const startTime = performance.now();
+        
+        const response = await fetch(`${CONFIG.API_BASE}/job_user_metadata?job_id=eq.${jobId}`, {
             method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 
+                'Content-Type': 'application/json',
+                'Accept': 'application/json'
+            },
             body: JSON.stringify({ user_notes: notes, reviewed: true })
         });
         
-        // Check if any rows were actually updated
         const contentRange = response.headers.get('Content-Range');
         const noRowsUpdated = contentRange === '*/*' || contentRange === '*/0';
         
         if (response.status === 404 || noRowsUpdated) {
-            const createResponse = await fetch(`${API_BASE}/job_user_metadata`, {
+            const createResponse = await fetch(`${CONFIG.API_BASE}/job_user_metadata`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json'
+                },
                 body: JSON.stringify({ job_id: jobId, user_notes: notes, reviewed: true })
             });
             
@@ -128,7 +326,13 @@ async function updateJobNotes(jobId, notes) {
             }
         }
         
-        // Update local data
+        const updateTime = performance.now() - startTime;
+        logPerformanceMetrics('updateJobNotes', updateTime, {
+            jobId: jobId,
+            notesLength: notes.length,
+            operation: noRowsUpdated ? 'create' : 'update'
+        });
+        
         const job = allJobs.find(j => j.id === jobId);
         if (job) {
             job.user_notes = notes;
@@ -149,6 +353,7 @@ async function updateJobNotes(jobId, notes) {
     }
 }
 
+// Export CSV function with better error handling
 async function exportCSV() {
     try {
         if (filteredJobs.length === 0) {
@@ -156,23 +361,71 @@ async function exportCSV() {
             return;
         }
         
-        // Get detailed data for filtered jobs only
-        const jobIds = filteredJobs.map(job => job.id);
-        const jobIdParams = jobIds.map(id => `id=eq.${id}`).join('&');
+        // Performance check for large exports
+        const exportSize = Math.min(filteredJobs.length, UI_CONFIG.MAX_VISIBLE_JOBS);
         
-        const response = await fetch(`${API_BASE}/job_board_export?${jobIdParams}`);
-        const jobs = await response.json();
+        if (filteredJobs.length > 10000) {
+            const confirmed = confirm(
+                `Export ${formatLargeNumber(filteredJobs.length)} jobs? ` +
+                `This is a large dataset and may take time to process. ` +
+                `Consider filtering results first for better performance.`
+            );
+            if (!confirmed) return;
+        }
         
-        if (jobs.length === 0) {
+        const startTime = performance.now();
+        const loadingSpinner = showLoadingSpinner(`Preparing export of ${formatLargeNumber(exportSize)} jobs...`);
+        
+        // Get detailed data for filtered jobs only (respecting display limits)
+        const jobsToExport = filteredJobs.slice(0, UI_CONFIG.MAX_VISIBLE_JOBS);
+        const jobIds = jobsToExport.map(job => job.id);
+        
+        // Batch the job IDs for very large exports
+        const batchSize = 1000;
+        let allExportJobs = [];
+        
+        for (let i = 0; i < jobIds.length; i += batchSize) {
+            const batch = jobIds.slice(i, i + batchSize);
+            const jobIdParams = batch.map(id => `id=eq.${id}`).join('&');
+            
+            const response = await fetch(`${CONFIG.API_BASE}/job_board_export?${jobIdParams}`, {
+                headers: {
+                    'Accept': 'application/json',
+                    'Content-Type': 'application/json'
+                }
+            });
+            
+            if (!response.ok) {
+                throw new Error(`Export batch failed: HTTP ${response.status}`);
+            }
+            
+            const batchJobs = await response.json();
+            allExportJobs = allExportJobs.concat(batchJobs);
+            
+            // Update progress for large exports
+            if (jobIds.length > 5000) {
+                const progress = Math.min(i + batchSize, jobIds.length);
+                const spinner = document.getElementById('loadingSpinner');
+                if (spinner) {
+                    const text = spinner.querySelector('.spinner-text');
+                    if (text) {
+                        text.textContent = `Processing ${formatLargeNumber(progress)} of ${formatLargeNumber(jobIds.length)} jobs...`;
+                    }
+                }
+            }
+        }
+        
+        if (allExportJobs.length === 0) {
+            hideLoadingSpinner();
             showMessage('No detailed data found for filtered jobs', 'error');
             return;
         }
         
         // Create CSV content
-        const headers = Object.keys(jobs[0]);
+        const headers = Object.keys(allExportJobs[0]);
         const csvContent = [
             headers.join(','),
-            ...jobs.map(job => 
+            ...allExportJobs.map(job => 
                 headers.map(header => {
                     const value = job[header] || '';
                     return `"${String(value).replace(/"/g, '""')}"`;
@@ -186,7 +439,7 @@ async function exportCSV() {
         const a = document.createElement('a');
         a.href = url;
         
-        // Include filter info in filename
+        // Include filter info and dataset size in filename
         const search = document.getElementById('searchInput').value;
         const status = document.getElementById('statusFilter').value;
         const query = document.getElementById('querySelect').value;
@@ -195,6 +448,9 @@ async function exportCSV() {
         if (status) filename += `_${status}`;
         if (search) filename += `_search`;
         if (query !== 'job_board_main') filename += `_${query.replace('job_board_', '')}`;
+        if (filteredJobs.length > UI_CONFIG.MAX_VISIBLE_JOBS) {
+            filename += `_first${UI_CONFIG.MAX_VISIBLE_JOBS}`;
+        }
         filename += '.csv';
         
         a.download = filename;
@@ -203,9 +459,27 @@ async function exportCSV() {
         document.body.removeChild(a);
         window.URL.revokeObjectURL(url);
         
-        showMessage(`Exported ${jobs.length} filtered jobs to CSV`, 'success');
+        const exportTime = performance.now() - startTime;
+        hideLoadingSpinner();
+        
+        logPerformanceMetrics('exportCSV', exportTime, {
+            jobsExported: allExportJobs.length,
+            totalFiltered: filteredJobs.length,
+            csvSize: csvContent.length,
+            filename: filename
+        });
+        
+        let message = `Exported ${formatLargeNumber(allExportJobs.length)} jobs to CSV`;
+        if (filteredJobs.length > UI_CONFIG.MAX_VISIBLE_JOBS) {
+            message += ` (first ${formatLargeNumber(UI_CONFIG.MAX_VISIBLE_JOBS)} of ${formatLargeNumber(filteredJobs.length)})`;
+        }
+        showMessage(message, 'success');
+        
     } catch (error) {
+        hideLoadingSpinner();
         console.error('Error exporting CSV:', error);
-        showMessage('Error exporting CSV', 'error');
+        showMessage(`Error exporting CSV: ${error.message}`, 'error');
     }
 }
+
+console.log('🔌 API layer loaded successfully');
