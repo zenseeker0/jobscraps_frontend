@@ -219,35 +219,30 @@ function addApplicationRecord(companyName) {
 
 // Phase 4: Enhanced search implementation
 function setupAdvancedSearch() {
-    const searchInput = document.getElementById('searchInput');
-    
-    // Override the existing search handler
-    searchInput.removeEventListener('input', searchInput.oninput);
-    searchInput.addEventListener('input', debounce(performAdvancedSearch, UI_CONFIG.SEARCH_DEBOUNCE_MS));
-    
-    // Add search button for immediate search
-    const searchButton = document.createElement('button');
-    searchButton.textContent = '🔍';
-    searchButton.onclick = performAdvancedSearch;
-    searchButton.style.marginLeft = '4px';
-    searchButton.style.padding = '6px 10px';
-    searchInput.parentNode.appendChild(searchButton);
-}
+    const searchInput   = document.getElementById('searchInput');
+    const statusFilter  = document.getElementById('statusFilter');
+    const querySelect   = document.getElementById('querySelect');
 
-// Phase 4: Workflow efficiency reporting
-function generateWorkflowReport() {
-    const analytics = workflowAnalytics.getEfficiencyStats();
-    const efficiency = calculateWorkflowEfficiency();
-    
-    const report = {
-        sessionSummary: analytics,
-        efficiencyMetrics: efficiency,
-        recommendations: generateWorkflowRecommendations(analytics, efficiency),
-        timestamp: new Date().toISOString()
-    };
-    
-    console.log('Workflow Efficiency Report:', report);
-    return report;
+    // Wire search & status directly back to core.filterJobs
+    searchInput.removeEventListener('input', searchInput.oninput);
+    searchInput.addEventListener(
+        'input',
+        debounce(() => filterJobs(true), UI_CONFIG.SEARCH_DEBOUNCE_MS)
+    );
+    statusFilter.addEventListener('change', () => filterJobs(true));
+
+    // Query-selector reloads the data set
+    querySelect.addEventListener('change', () => loadAndDisplayJobs());
+
+    // (Optional) add a little search button for folks who prefer clicking
+    if (!document.getElementById('advancedSearchBtn')) {
+        const btn = document.createElement('button');
+        btn.id = 'advancedSearchBtn';
+        btn.textContent = '🔍';
+        btn.onclick = () => filterJobs(true);
+        btn.style.marginLeft = '4px';
+        searchInput.parentNode.appendChild(btn);
+    }
 }
 
 function generateWorkflowRecommendations(analytics, efficiency) {

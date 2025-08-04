@@ -1,7 +1,7 @@
-console.log('🆕 FIXED STATUS FILTERING CORE.JS LOADED!');
+console.log('🆕 NEW CORE.JS LOADED!');
 
 // Core application logic and state management
-// FIXED: Status filtering and updating issues
+// Enhanced with irrelevant status and company metadata features
 
 // Global state variables
 let allJobs = [];
@@ -29,47 +29,15 @@ document.addEventListener('keydown', handleKeyPress);
 
 async function initializeApp() {
     // Show loading indicator for larger dataset
-    showMessage('Loading job board...', 'info');
+    showMessage('Loading job board... (this may take a moment with 85k+ jobs)', 'info');
     
     // Initialize event listeners
     document.getElementById('querySelect').addEventListener('change', loadAndDisplayJobs);
-    document.getElementById('searchInput').addEventListener('input', debounce(handleSearch, UI_CONFIG.SEARCH_DEBOUNCE_MS));
-    document.getElementById('statusFilter').addEventListener('change', () => handleSearch());
+    document.getElementById('searchInput').addEventListener('input', debounce(filterJobs, UI_CONFIG.SEARCH_DEBOUNCE_MS));
+    document.getElementById('statusFilter').addEventListener('change', () => filterJobs(false));
     
     // Load initial data
     await loadAndDisplayJobs();
-}
-
-// ENHANCED: Centralized search handler that can use API-level filtering for better performance
-async function handleSearch() {
-    const searchTerm = document.getElementById('searchInput').value.trim();
-    const statusValue = document.getElementById('statusFilter').value;
-    
-    // For large datasets, use API-level filtering when possible
-    if (allJobs.length > UI_CONFIG.MAX_VISIBLE_JOBS && (searchTerm || statusValue)) {
-        console.log('🔍 Using API-level filtering for large dataset');
-        
-        try {
-            const filters = {};
-            if (searchTerm) filters.search = searchTerm;
-            if (statusValue) filters.status = statusValue;
-            
-            const filteredData = await loadJobsWithFilters(filters);
-            allJobs = filteredData; // Replace allJobs with filtered results
-            filteredJobs = [...allJobs]; // No additional frontend filtering needed
-            
-            renderJobs();
-            updateStats();
-            clearSelection();
-            
-        } catch (error) {
-            console.error('API-level filtering failed, falling back to frontend filtering:', error);
-            filterJobs(true); // Fallback to frontend filtering
-        }
-    } else {
-        // Use frontend filtering for smaller datasets or when no search terms
-        filterJobs(true);
-    }
 }
 
 async function loadAndDisplayJobs() {
@@ -81,16 +49,13 @@ async function loadAndDisplayJobs() {
         allJobs = await loadJobs();
         performanceMetrics.jobsLoaded = allJobs.length;
         
-        // Since we're now filtering at the API level, we should have far fewer jobs
-        console.log(`📊 Loaded ${allJobs.length} jobs (excluded jobs already filtered out)`);
-        
-        // Performance warning for very large datasets (should be rare now)
+        // Performance warning for very large datasets
         if (allJobs.length > UI_CONFIG.MAX_VISIBLE_JOBS) {
             showMessage(
                 `⚠️ Large dataset detected (${allJobs.length.toLocaleString()} jobs). ` +
-                `Consider using more specific query or filters.`, 
+                `Consider using filters to improve performance.`, 
                 'warning', 
-                6000
+                8000
             );
         }
         
@@ -113,139 +78,101 @@ async function loadAndDisplayJobs() {
     }
 }
 
-// FIXED: Frontend filtering with better status logic
 function filterJobs(resetSelection = true) {
-    const startTime = performance.now();
+  const startTime = performance.now();
 
-    // — PREP SEARCH & STATUS —
-    const searchTerm = document.getElementById('searchInput').value.trim().toLowerCase();
-    const statusValue = document.getElementById('statusFilter').value;
+  // — PREP SEARCH & STATUS —
+  const searchTerm = document
+    .getElementById('searchInput')
+    .value
+    .trim()
+    .toLowerCase();
+  const statusValue = document.getElementById('statusFilter').value;
 
-    // — LOG ENTRY STATE —
-    console.log('🔍 filterJobs start', {
-        totalJobs: allJobs.length,
-        searchTerm,
-        statusValue
-    });
+  // — LOG ENTRY STATE —
+  console.log('🔍 filterJobs start', {
+    totalJobs: allJobs.length,
+    searchTerm,
+    statusValue
+  });
 
-    // Start with all jobs (excluded jobs should already be filtered out by API)
-    let visibleJobs = [...allJobs];
+  // — 1) EXCLUDE HANDLING —
+  let visibleJobs = allJobs.filter(job => {
+    // support both top-level and nested metadata
+    const meta = job.user_metadata || {};
+    const isExcluded =
+      job.excluded === true ||
+      meta.excluded === true;
+    return !isExcluded;
+  });
+  console.log('‣ after exclusion:', visibleJobs.length);
 
-    // — 1) ADDITIONAL EXCLUSION SAFETY CHECK —
-    // This is a safety net in case any excluded jobs slipped through API filtering
+  // — 2) SEARCH FILTER (title | company | exact ID) —
+  if (searchTerm) {
     visibleJobs = visibleJobs.filter(job => {
-        // Check multiple possible locations for exclusion flag
-        const isExcluded = 
-            job.excluded === true ||
-            job.exclusion_reason !== null ||
-            (job.user_metadata && job.user_metadata.excluded === true);
-        
-        if (isExcluded) {
-            console.warn(`⚠️ Excluded job found in frontend data: ${job.id} - ${job.title}`);
-        }
-        return !isExcluded;
+      const title   = (job.title   || '').toLowerCase();
+      const company = (job.company || '').toLowerCase();
+      const id      = (job.id      || '').toLowerCase();
+      return (
+        title.includes(searchTerm) ||
+        company.includes(searchTerm) ||
+        id === searchTerm
+      );
     });
-    
-    if (visibleJobs.length !== allJobs.length) {
-        console.log('‣ after exclusion safety check:', visibleJobs.length);
-    }
+    console.log('‣ after search filter:', visibleJobs.length);
+  }
 
-    // — 2) SEARCH FILTER (enhanced with exact ID matching) —
-    if (searchTerm) {
-        visibleJobs = visibleJobs.filter(job => {
-            const title = (job.title || '').toLowerCase();
-            const company = (job.company || '').toLowerCase();
-            const id = (job.id || '').toLowerCase();
-            const location = (job.location || '').toLowerCase();
-            
-            // Exact ID match gets priority
-            if (id === searchTerm) return true;
-            
-            // Otherwise search in title, company, and location
-            return (
-                title.includes(searchTerm) ||
-                company.includes(searchTerm) ||
-                location.includes(searchTerm)
-            );
-        });
-        console.log('‣ after search filter:', visibleJobs.length);
-    }
+  // — 3) STATUS FILTER (uses job.status or metadata.status/reviewed) —
+  if (statusValue) {
+    visibleJobs = visibleJobs.filter(job => {
+      const meta = job.user_metadata || {};
+      const assignedStatus = job.status || meta.status;
+      const reviewed       = job.reviewed === true || meta.reviewed === true;
 
-    // — 3) FIXED STATUS FILTER —
-    if (statusValue) {
-        console.log(`🔍 Filtering by status: "${statusValue}"`);
-        
-        visibleJobs = visibleJobs.filter(job => {
-            // FIXED: Check status field directly from the API response
-            // The API should be returning the status from the joined user_metadata
-            const jobStatus = job.status;
-            const jobReviewed = job.reviewed;
-            
-            console.log(`Job ${job.id}: status="${jobStatus}", reviewed=${jobReviewed}`);
-            
-            if (statusValue === 'unreviewed') {
-                // Unreviewed means no status (empty string or null) AND not marked as reviewed
-                const isUnreviewed = (!jobStatus || jobStatus === '' || jobStatus === 'unreviewed') && 
-                                   (!jobReviewed || jobReviewed === false);
-                console.log(`  → unreviewed check: ${isUnreviewed}`);
-                return isUnreviewed;
-            } else {
-                // For specific statuses, match exactly
-                const matches = jobStatus === statusValue;
-                console.log(`  → status "${statusValue}" match: ${matches}`);
-                return matches;
-            }
-        });
-        console.log('‣ after status filter:', visibleJobs.length);
-        
-        // DEBUG: Show a sample of the filtered jobs
-        if (visibleJobs.length > 0) {
-            console.log('Sample filtered jobs:', visibleJobs.slice(0, 3).map(j => ({ 
-                id: j.id, 
-                title: j.title.substring(0, 30), 
-                status: j.status, 
-                reviewed: j.reviewed 
-            })));
-        }
-    }
+      if (statusValue === 'unreviewed') {
+        return !assignedStatus && reviewed === false;
+      }
+      return assignedStatus === statusValue;
+    });
+    console.log('‣ after status filter:', visibleJobs.length);
+  }
 
-    // — 4) PERFORMANCE-BASED TRUNCATION —
-    if (!searchTerm && !statusValue && visibleJobs.length > UI_CONFIG.MAX_VISIBLE_JOBS) {
-        filteredJobs = visibleJobs.slice(0, UI_CONFIG.MAX_VISIBLE_JOBS);
-        showMessage(
-            `⚠️ Showing first ${UI_CONFIG.MAX_VISIBLE_JOBS.toLocaleString()} of ` +
-            `${visibleJobs.length.toLocaleString()} jobs. Use search or filters to narrow results.`,
-            'info',
-            5000
-        );
-    } else {
-        filteredJobs = visibleJobs;
-    }
+  // — 4) TRUNCATE IF NO FILTERS —
+  if (!searchTerm && !statusValue && visibleJobs.length > UI_CONFIG.MAX_VISIBLE_JOBS) {
+    filteredJobs = visibleJobs.slice(0, UI_CONFIG.MAX_VISIBLE_JOBS);
+    showMessage(
+      `⚠️ Showing first ${UI_CONFIG.MAX_VISIBLE_JOBS.toLocaleString()} of ` +
+      `${visibleJobs.length.toLocaleString()} jobs. Use filters to narrow down.`,
+      'info',
+      5000
+    );
+  } else {
+    filteredJobs = visibleJobs;
+  }
 
-    // — 5) TIMING & DEBUG LOG —
-    performanceMetrics.filterTime = performance.now() - startTime;
-    if (UI_CONFIG.DEBUG_MODE) {
-        console.log(
-            `filterJobs completed: ${filteredJobs.length} jobs in ` +
-            `${performanceMetrics.filterTime.toFixed(1)}ms`
-        );
-    }
+  // — 5) TIMING & DEBUG LOG —
+  performanceMetrics.filterTime = performance.now() - startTime;
+  if (UI_CONFIG.DEBUG_MODE) {
+    console.log(
+      `filterJobs completed: ${filteredJobs.length} jobs in ` +
+      `${performanceMetrics.filterTime.toFixed(1)}ms`
+    );
+  }
 
-    // — 6) RENDER & STATS —
-    renderJobs();
-    updateStats();
+  // — 6) RENDER & STATS —
+  renderJobs();
+  updateStats();
 
-    // — 7) SELECTION HANDLING —
-    if (resetSelection) {
-        clearSelection();
-    } else {
-        preserveSelection();
-    }
+  // — 7) SELECTION HANDLING —
+  if (resetSelection) {
+    clearSelection();
+  } else {
+    preserveSelection();
+  }
 }
 
-// ENHANCED: More efficient rendering with virtual scrolling preparation
 function renderJobs() {
-    console.log('🔄 OPTIMIZED renderJobs function is running!');
+    console.log('🔄 FIXED renderJobs function is running!');
     const startTime = performance.now();
     const tbody = document.getElementById('jobsTableBody');
     
@@ -261,22 +188,13 @@ function renderJobs() {
     
     console.log('📊 Rendering', jobsToRender.length, 'jobs');
     
-    // Use DocumentFragment for better performance
-    const fragment = document.createDocumentFragment();
+    // FIXED: Use proper table element instead of div
+    const tempTable = document.createElement('table');
+    const tempTbody = document.createElement('tbody');
+    tempTable.appendChild(tempTbody);
     
-    jobsToRender.forEach((job, index) => {
-        const row = document.createElement('tr');
-        row.className = 'job-row';
-        row.setAttribute('data-job-id', job.id);
-        row.setAttribute('data-index', index);
-        row.onclick = () => selectJob(index);
-        
-        // FIXED: Better status display with debugging
-        const displayStatus = job.status || 'unreviewed';
-        const statusShortcut = getStatusShortcut(displayStatus);
-        
-        // Build row content with enhanced status display
-        row.innerHTML = `
+    tempTbody.innerHTML = jobsToRender.map((job, index) => `
+        <tr class="job-row" data-job-id="${job.id}" data-index="${index}" onclick="selectJob(${index})">
             <td class="selection-cell">
                 <input type="checkbox" 
                        id="job-${job.id}" 
@@ -297,24 +215,30 @@ function renderJobs() {
                 ${job.is_remote ? '<span class="remote-badge">Remote</span>' : ''}
             </td>
             <td>
-                <span class="status-badge status-${displayStatus}">
-                    ${displayStatus}
+                <span class="status-badge status-${job.status || 'unreviewed'}">
+                    ${job.status || 'unreviewed'}
                 </span>
-                ${statusShortcut ? `<span class="status-shortcut">${statusShortcut}</span>` : ''}
                 ${job.exclusion_reason ? `<div class="exclusion-reason">${escapeHtml(job.exclusion_reason)}</div>` : ''}
             </td>
             <td class="salary">${formatSalary(job)}</td>
             <td>${formatDate(job.date_posted)}</td>
-        `;
-        
-        fragment.appendChild(row);
-    });
+        </tr>
+    `).join('');
     
-    // Clear and populate tbody
+    // Clear existing content and move new rows
     tbody.innerHTML = '';
-    tbody.appendChild(fragment);
+    while (tempTbody.firstChild) {
+        tbody.appendChild(tempTbody.firstChild);
+    }
     
     console.log('✅ Table updated with', tbody.children.length, 'rows');
+    
+    // DEBUG: Check what's actually in the DOM now
+    const firstRow = tbody.children[0];
+    if (firstRow) {
+        console.log('🔍 First row in DOM has', firstRow.children.length, 'cells');
+        console.log('🔍 First cell content:', firstRow.children[0]?.innerHTML?.substring(0, 100));
+    }
     
     // Show truncation warning if needed
     if (filteredJobs.length > UI_CONFIG.MAX_VISIBLE_JOBS) {
@@ -330,18 +254,6 @@ function renderJobs() {
     if (UI_CONFIG.DEBUG_MODE) {
         console.log(`Rendered ${jobsToRender.length} jobs in ${renderTime.toFixed(2)}ms`);
     }
-}
-
-// HELPER: Get keyboard shortcut for status
-function getStatusShortcut(status) {
-    const shortcuts = {
-        'interested': '1',
-        'applied': '2',
-        'followed-up': '3',
-        'rejected': '4',
-        'irrelevant': '5'
-    };
-    return shortcuts[status] || '';
 }
 
 function toggleJobSelection(jobId) {
@@ -475,10 +387,6 @@ async function loadAndDisplayJobDetails(jobId) {
 function renderJobDetails(job) {
     const panel = document.getElementById('detailsPanel');
     
-    // FIXED: Display current status correctly
-    const currentStatus = job.status || '';
-    console.log(`Rendering details for job ${job.id}, current status: "${currentStatus}"`);
-    
     panel.innerHTML = `
         <div class="details-header">
             <div class="details-title">${escapeHtml(job.title)}</div>
@@ -514,15 +422,14 @@ function renderJobDetails(job) {
         <div class="details-actions">
             <select class="status-select" onchange="updateJobStatus('${job.id}', this.value)" ${isUpdating ? 'disabled' : ''}>
                 <option value="">Set Status</option>
-                <option value="interested" ${currentStatus === 'interested' ? 'selected' : ''}>🟦 Interested (1)</option>
-                <option value="applied" ${currentStatus === 'applied' ? 'selected' : ''}>🟢 Applied (2)</option>
-                <option value="followed-up" ${currentStatus === 'followed-up' ? 'selected' : ''}>🟡 Followed Up (3)</option>
-                <option value="rejected" ${currentStatus === 'rejected' ? 'selected' : ''}>🔴 Rejected (4)</option>
-                <option value="irrelevant" ${currentStatus === 'irrelevant' ? 'selected' : ''}>⚪ Irrelevant (5)</option>
+                <option value="interested" ${job.status === 'interested' ? 'selected' : ''}>Interested</option>
+                <option value="applied" ${job.status === 'applied' ? 'selected' : ''}>Applied</option>
+                <option value="followed-up" ${job.status === 'followed-up' ? 'selected' : ''}>Followed Up</option>
+                <option value="rejected" ${job.status === 'rejected' ? 'selected' : ''}>Rejected</option>
+                <option value="irrelevant" ${job.status === 'irrelevant' ? 'selected' : ''}>Irrelevant</option>
             </select>
             <a href="${job.job_url}" target="_blank" style="color: #3b82f6; text-decoration: none;">🔗 View Job</a>
             ${job.job_url_direct ? `<a href="${job.job_url_direct}" target="_blank" style="color: #3b82f6; text-decoration: none;">🎯 Direct Link</a>` : ''}
-            <button onclick="debugJobData('${job.id}')" style="font-size: 11px; background: #64748b;">🐛 Debug</button>
         </div>
         
         <div class="details-content">
@@ -540,23 +447,7 @@ function renderJobDetails(job) {
     `;
 }
 
-// DEBUG FUNCTION: Help troubleshoot status issues
-function debugJobData(jobId) {
-    const job = allJobs.find(j => j.id === jobId);
-    console.group(`🐛 Debug Job Data: ${jobId}`);
-    console.log('Full job object:', job);
-    console.log('Status field:', job?.status);
-    console.log('Reviewed field:', job?.reviewed);
-    console.log('User notes:', job?.user_notes);
-    console.log('Excluded:', job?.excluded);
-    console.log('Exclusion reason:', job?.exclusion_reason);
-    console.groupEnd();
-    
-    // Show in UI too
-    showMessage(`Debug: Job ${jobId} status="${job?.status}" reviewed=${job?.reviewed}`, 'info', 5000);
-}
-
-// Company metadata functionality (unchanged)
+// Company metadata functionality
 async function showCompanyTooltip(event, companyName) {
     if (!companyName || companyName === 'Unknown') return;
     
@@ -758,14 +649,8 @@ function clearSelection() {
     `;
 }
 
-// ENHANCED: Keyboard shortcuts with status setting
 function handleKeyPress(event) {
     if (filteredJobs.length === 0) return;
-    
-    // Don't trigger shortcuts when typing in inputs
-    if (event.target.tagName === 'INPUT' || event.target.tagName === 'TEXTAREA') {
-        return;
-    }
     
     switch(event.key) {
         case 'ArrowDown':
@@ -792,44 +677,14 @@ function handleKeyPress(event) {
             // Clear search for large datasets
             if (document.getElementById('searchInput').value) {
                 document.getElementById('searchInput').value = '';
-                handleSearch();
+                filterJobs(true);
             }
             break;
-        case '1':
-            if (selectedJobId) {
-                event.preventDefault();
-                updateJobStatus(selectedJobId, 'interested');
-            }
-            break;
-        case '2':
-            if (selectedJobId) {
-                event.preventDefault();
-                updateJobStatus(selectedJobId, 'applied');
-            }
-            break;
-        case '3':
-            if (selectedJobId) {
-                event.preventDefault();
-                updateJobStatus(selectedJobId, 'followed-up');
-            }
-            break;
-        case '4':
-            if (selectedJobId) {
-                event.preventDefault();
-                updateJobStatus(selectedJobId, 'rejected');
-            }
-            break;
-        case '5':
-            if (selectedJobId) {
+        case 'i':
+            // Quick irrelevant marking
+            if (selectedJobId && event.ctrlKey) {
                 event.preventDefault();
                 updateJobStatus(selectedJobId, 'irrelevant');
-            }
-            break;
-        case ' ':
-            // Space bar moves to next job
-            if (selectedIndex < Math.min(filteredJobs.length - 1, UI_CONFIG.MAX_VISIBLE_JOBS - 1)) {
-                event.preventDefault();
-                selectJob(selectedIndex + 1);
             }
             break;
     }
@@ -850,4 +705,4 @@ function getPerformanceStats() {
     };
 }
 
-console.log('✅ FIXED STATUS FILTERING - Core application loaded successfully');
+console.log('✅ Core application loaded successfully');

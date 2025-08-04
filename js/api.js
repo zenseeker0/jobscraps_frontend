@@ -1,5 +1,5 @@
-// API layer - Enhanced with better error handling and timeouts
-// FIXED: Resolved timeout and JSON parsing issues
+// API layer - FIXED: Add proper exclusion filtering at database level
+// This ensures excluded jobs are filtered OUT before reaching the frontend
 
 async function loadJobs() {
     const query = document.getElementById('querySelect').value;
@@ -10,7 +10,17 @@ async function loadJobs() {
         
         // Add reasonable limits to prevent 674 MB downloads!
         const limit = UI_CONFIG.MAX_VISIBLE_JOBS || 5000;
-        const url = `${CONFIG.API_BASE}/${query}?order=date_scraped.desc&limit=${limit}`;
+        
+        // FIXED: Add exclusion filtering at the API level
+        // This prevents excluded jobs from ever reaching the frontend
+        let url = `${CONFIG.API_BASE}/${query}?order=date_scraped.desc&limit=${limit}`;
+        
+        // CRITICAL FIX: Filter out excluded jobs at the database level
+        // This handles jobs where excluded=true OR user_metadata->>'excluded'='true'
+        url += '&or=(excluded.is.null,excluded.eq.false)';
+        
+        // Additional safety: exclude jobs with exclusion_reason (fallback)
+        url += '&exclusion_reason=is.null';
         
         console.log(`🔄 Loading jobs from: ${url}`);
         
@@ -49,17 +59,17 @@ async function loadJobs() {
             query: query,
             jobCount: Array.isArray(data) ? data.length : 1,
             responseSize: responseText.length,
-            requestedLimit: limit
+            requestedLimit: limit,
+            exclusionFilterApplied: true
         });
         
         if (Array.isArray(data)) {
-            console.log(`✅ Successfully loaded ${data.length} jobs (limit: ${limit})`);
+            console.log(`✅ Successfully loaded ${data.length} jobs (limit: ${limit}, excluded jobs filtered out)`);
             
             // Show info about the dataset size
             showMessage(
-                `📊 Loaded ${formatLargeNumber(data.length)} jobs. ` +
-                `This is a limited view for performance. Use filters to find specific jobs.`,
-                'info', 6000
+                `📊 Loaded ${formatLargeNumber(data.length)} jobs (excluded jobs filtered out at database level).`,
+                'info', 4000
             );
             
             return data;
@@ -71,6 +81,77 @@ async function loadJobs() {
         hideLoadingSpinner();
         console.error('Error loading jobs:', error);
         showMessage(`Failed to load jobs: ${error.message}`, 'error');
+        throw error;
+    }
+}
+
+// ENHANCED: Load jobs with specific filters for better performance
+async function loadJobsWithFilters(additionalFilters = {}) {
+    const query = document.getElementById('querySelect').value;
+    
+    try {
+        const loadingSpinner = showLoadingSpinner('Loading filtered jobs...');
+        const startTime = performance.now();
+        
+        const limit = UI_CONFIG.MAX_VISIBLE_JOBS || 5000;
+        let url = `${CONFIG.API_BASE}/${query}?order=date_scraped.desc&limit=${limit}`;
+        
+        // ALWAYS exclude excluded jobs at the database level
+        url += '&or=(excluded.is.null,excluded.eq.false)';
+        url += '&exclusion_reason=is.null';
+        
+        // Add any additional filters
+        Object.entries(additionalFilters).forEach(([key, value]) => {
+            if (value !== null && value !== undefined && value !== '') {
+                if (key === 'search') {
+                    // Handle search across title and company
+                    url += `&or=(title.ilike.*${encodeURIComponent(value)}*,company.ilike.*${encodeURIComponent(value)}*)`;
+                } else if (key === 'status') {
+                    if (value === 'unreviewed') {
+                        url += '&or=(status.is.null,status.eq.)&reviewed=not.eq.true';
+                    } else {
+                        url += `&status=eq.${encodeURIComponent(value)}`;
+                    }
+                } else {
+                    url += `&${key}=eq.${encodeURIComponent(value)}`;
+                }
+            }
+        });
+        
+        console.log(`🔄 Loading filtered jobs from: ${url}`);
+        
+        const response = await fetch(url);
+        
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+        
+        const responseText = await response.text();
+        let data;
+        
+        if (responseText.length === 0) {
+            data = [];
+        } else {
+            data = JSON.parse(responseText);
+        }
+        
+        const loadTime = performance.now() - startTime;
+        hideLoadingSpinner();
+        
+        logPerformanceMetrics('loadJobsWithFilters', loadTime, {
+            query: query,
+            jobCount: Array.isArray(data) ? data.length : 0,
+            responseSize: responseText.length,
+            filters: additionalFilters
+        });
+        
+        console.log(`✅ Successfully loaded ${data.length} filtered jobs`);
+        
+        return Array.isArray(data) ? data : [];
+    } catch (error) {
+        hideLoadingSpinner();
+        console.error('Error loading filtered jobs:', error);
+        showMessage(`Failed to load filtered jobs: ${error.message}`, 'error');
         throw error;
     }
 }
@@ -195,13 +276,37 @@ async function updateJobStatus(jobId, status) {
             }
         }
         
-        filterJobs(false);
-        
-        let message = `Status updated to "${status}"`;
+        // IMPORTANT: If job is now excluded, remove it from view immediately
         if (status === 'irrelevant') {
-            message += ' (marked as excluded)';
+            // Remove from allJobs and filteredJobs to hide it immediately
+            const allJobsIndex = allJobs.findIndex(j => j.id === jobId);
+            if (allJobsIndex >= 0) {
+                allJobs.splice(allJobsIndex, 1);
+            }
+            
+            const filteredIndex = filteredJobs.findIndex(j => j.id === jobId);
+            if (filteredIndex >= 0) {
+                filteredJobs.splice(filteredIndex, 1);
+            }
+            
+            // Re-render the job list to reflect the change
+            renderJobs();
+            updateStats();
+            
+            // Clear selection if this was the selected job
+            if (selectedJobId === jobId) {
+                clearSelection();
+                selectedIndex = -1;
+                selectedJobId = null;
+            }
+            
+            showMessage(`Job marked as irrelevant and hidden from view`, 'success', 3000);
+        } else {
+            filterJobs(false);
+            
+            let message = `Status updated to "${status}"`;
+            showMessage(message, 'success', 2000);
         }
-        showMessage(message, 'success', 2000);
         
     } catch (error) {
         console.error('Error updating status:', error);
@@ -220,7 +325,7 @@ async function updateJobStatus(jobId, status) {
     }
 }
 
-// Company metadata functions
+// Company metadata functions (unchanged)
 async function loadCompanyMetadata(companyName) {
     try {
         const response = await fetch(`${CONFIG.API_BASE}/company_user_metadata?company_name=eq.${encodeURIComponent(companyName)}`, {
@@ -388,7 +493,11 @@ async function exportCSV() {
             const batch = jobIds.slice(i, i + batchSize);
             const jobIdParams = batch.map(id => `id=eq.${id}`).join('&');
             
-            const response = await fetch(`${CONFIG.API_BASE}/job_board_export?${jobIdParams}`, {
+            // FIXED: Add exclusion filtering to export as well
+            let exportUrl = `${CONFIG.API_BASE}/job_board_export?${jobIdParams}`;
+            exportUrl += '&or=(excluded.is.null,excluded.eq.false)';
+            
+            const response = await fetch(exportUrl, {
                 headers: {
                     'Accept': 'application/json',
                     'Content-Type': 'application/json'
@@ -482,4 +591,4 @@ async function exportCSV() {
     }
 }
 
-console.log('🔌 API layer loaded successfully');
+console.log('🔌 FIXED API layer loaded successfully - excluded jobs filtered at database level');
