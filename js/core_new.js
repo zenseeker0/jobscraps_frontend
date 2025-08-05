@@ -81,9 +81,15 @@ async function loadAndDisplayJobs() {
         allJobs = await loadJobs();
         performanceMetrics.jobsLoaded = allJobs.length;
         
-        // Since we're now filtering at the API level, we should have far fewer jobs
-        console.log(`📊 Loaded ${allJobs.length} jobs (excluded jobs already filtered out)`);
-        
+        // Since database views handle exclusion logic, we should have the right jobs
+        console.log(`📊 Loaded ${allJobs.length} jobs (database views handle exclusion logic)`);
+        const statusCounts = {};
+        allJobs.forEach(job => {
+            const status = job.status || 'unreviewed';
+            statusCounts[status] = (statusCounts[status] || 0) + 1;
+        });
+        console.log('📊 STATUS BREAKDOWN:', statusCounts);
+
         // Performance warning for very large datasets (should be rare now)
         if (allJobs.length > UI_CONFIG.MAX_VISIBLE_JOBS) {
             showMessage(
@@ -113,7 +119,7 @@ async function loadAndDisplayJobs() {
     }
 }
 
-// FIXED: Frontend filtering with better status logic
+// FIXED: Frontend filtering with better status logic - database views handle exclusion
 function filterJobs(resetSelection = true) {
     const startTime = performance.now();
 
@@ -128,29 +134,10 @@ function filterJobs(resetSelection = true) {
         statusValue
     });
 
-    // Start with all jobs (excluded jobs should already be filtered out by API)
+    // Start with all jobs (database views handle exclusion logic)
     let visibleJobs = [...allJobs];
 
-    // — 1) ADDITIONAL EXCLUSION SAFETY CHECK —
-    // This is a safety net in case any excluded jobs slipped through API filtering
-    visibleJobs = visibleJobs.filter(job => {
-        // Check multiple possible locations for exclusion flag
-        const isExcluded = 
-            job.excluded === true ||
-            job.exclusion_reason !== null ||
-            (job.user_metadata && job.user_metadata.excluded === true);
-        
-        if (isExcluded) {
-            console.warn(`⚠️ Excluded job found in frontend data: ${job.id} - ${job.title}`);
-        }
-        return !isExcluded;
-    });
-    
-    if (visibleJobs.length !== allJobs.length) {
-        console.log('‣ after exclusion safety check:', visibleJobs.length);
-    }
-
-    // — 2) SEARCH FILTER (enhanced with exact ID matching) —
+    // — 1) SEARCH FILTER (enhanced with exact ID matching) —
     if (searchTerm) {
         visibleJobs = visibleJobs.filter(job => {
             const title = (job.title || '').toLowerCase();
@@ -171,45 +158,61 @@ function filterJobs(resetSelection = true) {
         console.log('‣ after search filter:', visibleJobs.length);
     }
 
-    // — 3) FIXED STATUS FILTER —
+    // — 2) FIXED STATUS FILTER —
     if (statusValue) {
         console.log(`🔍 Filtering by status: "${statusValue}"`);
+        let matchCount = 0; // Track matches for debugging
         
         visibleJobs = visibleJobs.filter(job => {
             // FIXED: Check status field directly from the API response
-            // The API should be returning the status from the joined user_metadata
             const jobStatus = job.status;
             const jobReviewed = job.reviewed;
             
-            console.log(`Job ${job.id}: status="${jobStatus}", reviewed=${jobReviewed}`);
+            let matches = false;
             
             if (statusValue === 'unreviewed') {
                 // Unreviewed means no status (empty string or null) AND not marked as reviewed
-                const isUnreviewed = (!jobStatus || jobStatus === '' || jobStatus === 'unreviewed') && 
-                                   (!jobReviewed || jobReviewed === false);
-                console.log(`  → unreviewed check: ${isUnreviewed}`);
-                return isUnreviewed;
+                matches = (!jobStatus || jobStatus === '' || jobStatus === 'unreviewed') && 
+                         (!jobReviewed || jobReviewed === false);
             } else {
                 // For specific statuses, match exactly
-                const matches = jobStatus === statusValue;
-                console.log(`  → status "${statusValue}" match: ${matches}`);
-                return matches;
+                matches = jobStatus === statusValue;
             }
+            
+            // Limited debugging - only log first few matches
+            if (matches && matchCount < 3) {
+                console.log(`  ✅ Match found: ${job.id} (status: "${jobStatus}")`);
+                matchCount++;
+            }
+            
+            return matches;
         });
-        console.log('‣ after status filter:', visibleJobs.length);
         
-        // DEBUG: Show a sample of the filtered jobs
-        if (visibleJobs.length > 0) {
-            console.log('Sample filtered jobs:', visibleJobs.slice(0, 3).map(j => ({ 
-                id: j.id, 
-                title: j.title.substring(0, 30), 
-                status: j.status, 
-                reviewed: j.reviewed 
-            })));
+        console.log(`‣ Found ${visibleJobs.length} jobs with status "${statusValue}"`);
+    
+        // Special debugging for irrelevant status
+        if (statusValue === 'irrelevant') {
+            console.log('🔍 IRRELEVANT DEBUG:');
+            console.log('Total jobs loaded:', allJobs.length);
+            
+            const irrelevantJobs = allJobs.filter(job => 
+                job.status && job.status.toLowerCase() === 'irrelevant'
+            );
+            console.log('Jobs with irrelevant status:', irrelevantJobs.length);
+            
+            if (irrelevantJobs.length > 0) {
+                console.log('Sample irrelevant job:', irrelevantJobs[0]);
+            }
+            
+            // Check if any jobs have status containing irrelevant
+            const partialMatches = allJobs.filter(job => 
+                job.status && job.status.toLowerCase().includes('irrelevant')
+            );
+            console.log('Jobs with status containing "irrelevant":', partialMatches.length);
         }
     }
 
-    // — 4) PERFORMANCE-BASED TRUNCATION —
+    // — 3) PERFORMANCE-BASED TRUNCATION —
     if (!searchTerm && !statusValue && visibleJobs.length > UI_CONFIG.MAX_VISIBLE_JOBS) {
         filteredJobs = visibleJobs.slice(0, UI_CONFIG.MAX_VISIBLE_JOBS);
         showMessage(
@@ -222,7 +225,7 @@ function filterJobs(resetSelection = true) {
         filteredJobs = visibleJobs;
     }
 
-    // — 5) TIMING & DEBUG LOG —
+    // — 4) TIMING & DEBUG LOG —
     performanceMetrics.filterTime = performance.now() - startTime;
     if (UI_CONFIG.DEBUG_MODE) {
         console.log(
@@ -231,11 +234,11 @@ function filterJobs(resetSelection = true) {
         );
     }
 
-    // — 6) RENDER & STATS —
+    // — 5) RENDER & STATS —
     renderJobs();
     updateStats();
 
-    // — 7) SELECTION HANDLING —
+    // — 6) SELECTION HANDLING —
     if (resetSelection) {
         clearSelection();
     } else {

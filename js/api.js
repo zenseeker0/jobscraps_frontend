@@ -1,5 +1,5 @@
-// API layer - FIXED: Add proper exclusion filtering at database level
-// This ensures excluded jobs are filtered OUT before reaching the frontend
+// API layer - FIXED: Remove frontend exclusion filtering - database views handle exclusion logic
+// Database views now properly distinguish between system exclusions and user status choices
 
 async function loadJobs() {
     const query = document.getElementById('querySelect').value;
@@ -11,16 +11,8 @@ async function loadJobs() {
         // Add reasonable limits to prevent 674 MB downloads!
         const limit = UI_CONFIG.MAX_VISIBLE_JOBS || 5000;
         
-        // FIXED: Add exclusion filtering at the API level
-        // This prevents excluded jobs from ever reaching the frontend
+        // FIXED: Database views now handle exclusion logic - no frontend filtering needed
         let url = `${CONFIG.API_BASE}/${query}?order=date_scraped.desc&limit=${limit}`;
-        
-        // CRITICAL FIX: Filter out excluded jobs at the database level
-        // This handles jobs where excluded=true OR user_metadata->>'excluded'='true'
-        url += '&or=(excluded.is.null,excluded.eq.false)';
-        
-        // Additional safety: exclude jobs with exclusion_reason (fallback)
-        url += '&exclusion_reason=is.null';
         
         console.log(`🔄 Loading jobs from: ${url}`);
         
@@ -60,15 +52,15 @@ async function loadJobs() {
             jobCount: Array.isArray(data) ? data.length : 1,
             responseSize: responseText.length,
             requestedLimit: limit,
-            exclusionFilterApplied: true
+            exclusionFilterApplied: false
         });
         
         if (Array.isArray(data)) {
-            console.log(`✅ Successfully loaded ${data.length} jobs (limit: ${limit}, excluded jobs filtered out)`);
+            console.log(`✅ Successfully loaded ${data.length} jobs (limit: ${limit}, database views handle exclusion)`);
             
             // Show info about the dataset size
             showMessage(
-                `📊 Loaded ${formatLargeNumber(data.length)} jobs (excluded jobs filtered out at database level).`,
+                `📊 Loaded ${formatLargeNumber(data.length)} jobs (database views handle exclusion logic).`,
                 'info', 4000
             );
             
@@ -96,9 +88,7 @@ async function loadJobsWithFilters(additionalFilters = {}) {
         const limit = UI_CONFIG.MAX_VISIBLE_JOBS || 5000;
         let url = `${CONFIG.API_BASE}/${query}?order=date_scraped.desc&limit=${limit}`;
         
-        // ALWAYS exclude excluded jobs at the database level
-        url += '&or=(excluded.is.null,excluded.eq.false)';
-        url += '&exclusion_reason=is.null';
+        // Database views handle exclusion logic - no frontend filtering needed
         
         // Add any additional filters
         Object.entries(additionalFilters).forEach(([key, value]) => {
@@ -213,12 +203,7 @@ async function updateJobStatus(jobId, status) {
         // Enhanced: Handle exclusion fields atomically when status is "irrelevant"
         const updateData = { status, reviewed: true };
         
-        if (status === 'irrelevant') {
-            updateData.excluded = true;
-            updateData.exclusion_reason = 'irrelevant';
-            updateData.exclusion_sources = JSON.stringify(['manual']);
-            updateData.exclusion_applied_at = new Date().toISOString();
-        } else if (status && status !== 'irrelevant') {
+        if (status && status !== '') {
             updateData.excluded = false;
             updateData.exclusion_reason = null;
             updateData.exclusion_sources = JSON.stringify([]);
@@ -276,38 +261,9 @@ async function updateJobStatus(jobId, status) {
             }
         }
         
-        // IMPORTANT: If job is now excluded, remove it from view immediately
-        if (status === 'irrelevant') {
-            // Remove from allJobs and filteredJobs to hide it immediately
-            const allJobsIndex = allJobs.findIndex(j => j.id === jobId);
-            if (allJobsIndex >= 0) {
-                allJobs.splice(allJobsIndex, 1);
-            }
-            
-            const filteredIndex = filteredJobs.findIndex(j => j.id === jobId);
-            if (filteredIndex >= 0) {
-                filteredJobs.splice(filteredIndex, 1);
-            }
-            
-            // Re-render the job list to reflect the change
-            renderJobs();
-            updateStats();
-            
-            // Clear selection if this was the selected job
-            if (selectedJobId === jobId) {
-                clearSelection();
-                selectedIndex = -1;
-                selectedJobId = null;
-            }
-            
-            showMessage(`Job marked as irrelevant and hidden from view`, 'success', 3000);
-        } else {
-            filterJobs(false);
-            
-            let message = `Status updated to "${status}"`;
-            showMessage(message, 'success', 2000);
-        }
-        
+        // Update local data and re-filter normally
+        filterJobs(false);
+        showMessage(`Status updated to "${status}"`, 'success', 2000);        
     } catch (error) {
         console.error('Error updating status:', error);
         showMessage(`Failed to update status: ${error.message}`, 'error');
@@ -493,9 +449,8 @@ async function exportCSV() {
             const batch = jobIds.slice(i, i + batchSize);
             const jobIdParams = batch.map(id => `id=eq.${id}`).join('&');
             
-            // FIXED: Add exclusion filtering to export as well
+            // FIXED: Database views handle exclusion - no frontend filtering needed
             let exportUrl = `${CONFIG.API_BASE}/job_board_export?${jobIdParams}`;
-            exportUrl += '&or=(excluded.is.null,excluded.eq.false)';
             
             const response = await fetch(exportUrl, {
                 headers: {
@@ -591,4 +546,4 @@ async function exportCSV() {
     }
 }
 
-console.log('🔌 FIXED API layer loaded successfully - excluded jobs filtered at database level');
+console.log('🔌 FIXED API layer loaded successfully - database views handle exclusion logic');
