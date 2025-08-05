@@ -1,4 +1,4 @@
-/* SQL Job Board Styles */
+/* SQL Job Board Styles - Phase 4 Enhanced with Workflow System */
 * { margin: 0; padding: 0; box-sizing: border-box; }
 
 body {
@@ -36,6 +36,7 @@ body {
     gap: 15px;
     align-items: center;
     flex-wrap: wrap;
+    margin-bottom: 10px;
 }
 
 .control-group {
@@ -57,6 +58,7 @@ button {
     color: white;
     cursor: pointer;
     border: none;
+    transition: background-color 0.2s;
 }
 
 button:hover {
@@ -74,6 +76,171 @@ button:disabled {
 
 .export-btn:hover {
     background: #059669;
+}
+
+.analytics-btn {
+    background: #8b5cf6;
+}
+
+.analytics-btn:hover {
+    background: #7c3aed;
+}
+
+/* Phase 4: Workflow Control Panel Styles */
+.workflow-control-panel {
+    margin-top: 15px;
+    padding: 15px;
+    background: #f8fafc;
+    border-radius: 6px;
+    border: 1px solid #e5e7eb;
+}
+
+.workflow-mode-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px;
+    flex-wrap: wrap;
+    gap: 15px;
+}
+
+.mode-selector {
+    display: flex;
+    gap: 8px;
+}
+
+.mode-btn {
+    padding: 8px 16px;
+    background: white;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 500;
+    transition: all 0.2s;
+    color: #6b7280;
+}
+
+.mode-btn:hover {
+    background: #f3f4f6;
+    border-color: #9ca3af;
+}
+
+.mode-btn.active {
+    background: #3b82f6;
+    border-color: #3b82f6;
+    color: white;
+}
+
+.mode-info {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    flex: 1;
+    min-width: 200px;
+}
+
+.mode-description {
+    font-size: 14px;
+    font-weight: 500;
+    color: #374151;
+}
+
+.mode-shortcuts {
+    font-size: 12px;
+    color: #6b7280;
+    font-family: monospace;
+}
+
+.workflow-stats {
+    display: flex;
+    gap: 15px;
+    align-items: center;
+    font-size: 13px;
+}
+
+.jobs-processed, .session-rate {
+    color: #6b7280;
+}
+
+.jobs-processed strong, .session-rate strong {
+    color: #374151;
+    font-weight: 600;
+}
+
+#undoBtn {
+    background: #f59e0b;
+    font-size: 12px;
+    padding: 6px 12px;
+}
+
+#undoBtn:hover:not(:disabled) {
+    background: #d97706;
+}
+
+#undoBtn:disabled {
+    background: #d1d5db;
+    color: #9ca3af;
+}
+
+/* Phase 4: Bulk Actions Panel */
+.bulk-actions-panel {
+    margin-top: 15px;
+    padding: 15px;
+    background: #fff7ed;
+    border: 1px solid #fed7aa;
+    border-radius: 6px;
+    border-left: 4px solid #f97316;
+}
+
+.bulk-selection-info {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+    font-size: 14px;
+}
+
+#selectionCount {
+    font-weight: 600;
+    color: #ea580c;
+}
+
+.selection-limit {
+    font-size: 12px;
+    color: #9ca3af;
+}
+
+.bulk-actions {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 12px;
+    flex-wrap: wrap;
+}
+
+.bulk-actions button {
+    padding: 6px 12px;
+    font-size: 12px;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.bulk-utilities {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.bulk-utilities button {
+    background: #64748b;
+    font-size: 12px;
+    padding: 4px 8px;
+}
+
+.bulk-utilities button:hover {
+    background: #475569;
 }
 
 .main-content {
@@ -143,14 +310,68 @@ button:disabled {
     outline: 2px solid #3b82f6;
 }
 
+/* Phase 4: Bulk selection styling */
+.job-row.bulk-selected {
+    background: #fef3c7 !important;
+    border-left: 4px solid #f59e0b;
+}
+
+.job-row.selected.bulk-selected {
+    background: linear-gradient(90deg, #dbeafe 50%, #fef3c7 50%) !important;
+    border-left: 4px solid #3b82f6;
+    border-right: 4px solid #f59e0b;
+}
+
+/* Phase 4: Workflow mode indicators */
+.job-row.workflow-review {
+    border-left: 2px solid #3b82f6;
+}
+
+.job-row.workflow-triage {
+    border-left: 2px solid #f59e0b;
+}
+
+.job-row.workflow-comparison {
+    border-left: 2px solid #10b981;
+}
+
+.selection-cell {
+    width: 40px;
+    text-align: center;
+}
+
+.selection-cell input[type="checkbox"] {
+    margin: 0;
+    cursor: pointer;
+}
+
 .job-title {
     font-weight: 500;
     color: #1e293b;
 }
 
+.role-badge {
+    background: #e0f2fe;
+    color: #0277bd;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-size: 10px;
+    margin-left: 6px;
+    display: inline-block;
+}
+
 .job-company {
     color: #3b82f6;
     font-weight: 500;
+    position: relative;
+}
+
+.company-name {
+    cursor: pointer;
+}
+
+.company-name:hover {
+    text-decoration: underline;
 }
 
 .status-badge {
@@ -165,7 +386,18 @@ button:disabled {
 .status-applied { background: #dcfce7; color: #166534; }
 .status-followed-up { background: #fef3c7; color: #92400e; }
 .status-rejected { background: #fee2e2; color: #dc2626; }
+.status-irrelevant { background: #f3f4f6; color: #6b7280; }
 .status-unreviewed { background: #f3f4f6; color: #6b7280; }
+
+.status-shortcut {
+    background: #f1f5f9;
+    color: #64748b;
+    padding: 1px 4px;
+    border-radius: 2px;
+    font-size: 10px;
+    margin-left: 4px;
+    font-family: monospace;
+}
 
 .remote-badge {
     background: #ecfdf5;
@@ -174,6 +406,34 @@ button:disabled {
     border-radius: 2px;
     font-size: 10px;
     font-weight: 500;
+}
+
+.excluded-badge {
+    background: #fef3c7;
+    color: #92400e;
+    padding: 1px 4px;
+    border-radius: 2px;
+    font-size: 10px;
+    font-weight: 500;
+    margin-left: 4px;
+}
+
+.scope-badge {
+    padding: 1px 4px;
+    border-radius: 2px;
+    font-size: 10px;
+    margin-left: 4px;
+}
+
+.scope-local { background: #fee2e2; color: #dc2626; }
+.scope-regional { background: #fef3c7; color: #92400e; }
+.scope-national { background: #dcfce7; color: #166534; }
+
+.exclusion-reason {
+    font-size: 10px;
+    color: #6b7280;
+    font-style: italic;
+    margin-top: 2px;
 }
 
 .salary {
@@ -208,12 +468,26 @@ button:disabled {
     color: #64748b;
 }
 
+.exclusion-details {
+    margin-top: 15px;
+    padding: 12px;
+    background: #fef3c7;
+    border-radius: 6px;
+    border-left: 4px solid #f59e0b;
+    font-size: 13px;
+}
+
+.exclusion-details > div {
+    margin-bottom: 4px;
+}
+
 .details-actions {
     padding: 15px 20px;
     border-bottom: 1px solid #e5e7eb;
     display: flex;
     gap: 10px;
     align-items: center;
+    flex-wrap: wrap;
     flex-shrink: 0;
 }
 
@@ -251,6 +525,8 @@ button:disabled {
     gap: 15px;
     font-size: 12px;
     color: #64748b;
+    align-items: center;
+    flex-wrap: wrap;
 }
 
 .loading {
@@ -267,11 +543,13 @@ button:disabled {
 
 .no-selection {
     display: flex;
+    flex-direction: column;
     align-items: center;
     justify-content: center;
     height: 100%;
     color: #9ca3af;
     font-style: italic;
+    text-align: center;
 }
 
 .error-message {
@@ -292,6 +570,24 @@ button:disabled {
     font-size: 14px;
 }
 
+.warning-message {
+    background: #fef3c7;
+    color: #92400e;
+    padding: 8px 12px;
+    border-radius: 4px;
+    margin: 10px 0;
+    font-size: 14px;
+}
+
+.info-message {
+    background: #dbeafe;
+    color: #1d4ed8;
+    padding: 8px 12px;
+    border-radius: 4px;
+    margin: 10px 0;
+    font-size: 14px;
+}
+
 .status-updating {
     opacity: 0.6;
     pointer-events: none;
@@ -299,4 +595,558 @@ button:disabled {
 
 .notes-updating {
     opacity: 0.6;
+}
+
+/* Company Tooltip Styles */
+.company-tooltip {
+    background: white;
+    border: 1px solid #e5e7eb;
+    border-radius: 6px;
+    padding: 12px;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+    z-index: 1000;
+    font-size: 12px;
+    max-width: 300px;
+    line-height: 1.4;
+}
+
+.tooltip-header {
+    font-weight: 600;
+    margin-bottom: 8px;
+    color: #1e293b;
+    border-bottom: 1px solid #e5e7eb;
+    padding-bottom: 4px;
+}
+
+.company-status-target { color: #059669; font-weight: 500; }
+.company-status-applied { color: #3b82f6; font-weight: 500; }
+.company-status-rejected { color: #dc2626; font-weight: 500; }
+.company-status-avoid { color: #f59e0b; font-weight: 500; }
+
+/* Company Modal Styles */
+.company-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 2000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.modal-backdrop {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.5);
+}
+
+.modal-content {
+    background: white;
+    border-radius: 8px;
+    width: 90%;
+    max-width: 600px;
+    max-height: 80vh;
+    overflow-y: auto;
+    position: relative;
+    z-index: 2001;
+}
+
+.modal-header {
+    padding: 20px;
+    border-bottom: 1px solid #e5e7eb;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.modal-header h3 {
+    margin: 0;
+    color: #1e293b;
+}
+
+.modal-body {
+    padding: 20px;
+}
+
+.company-field {
+    margin-bottom: 20px;
+}
+
+.company-field label {
+    display: block;
+    margin-bottom: 6px;
+    font-weight: 500;
+    color: #374151;
+}
+
+.company-field select,
+.company-field textarea {
+    width: 100%;
+    padding: 8px 12px;
+    border: 1px solid #d1d5db;
+    border-radius: 4px;
+    font-size: 14px;
+    font-family: inherit;
+}
+
+.company-field textarea {
+    min-height: 80px;
+    resize: vertical;
+}
+
+#applicationHistory {
+    background: #f8fafc;
+    padding: 12px;
+    border-radius: 4px;
+    margin-bottom: 10px;
+    font-size: 13px;
+    min-height: 60px;
+}
+
+.modal-footer {
+    padding: 20px;
+    border-top: 1px solid #e5e7eb;
+    display: flex;
+    gap: 10px;
+    justify-content: flex-end;
+}
+
+.modal-footer button {
+    padding: 8px 16px;
+    border: 1px solid #d1d5db;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+}
+
+.modal-footer button:first-child {
+    background: #3b82f6;
+    color: white;
+    border-color: #3b82f6;
+}
+
+.modal-footer button:first-child:hover {
+    background: #2563eb;
+}
+
+/* Phase 4: Progress Bar Styles (defined in utils.js, but ensuring they work) */
+.progress-container {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: white;
+    padding: 20px;
+    border-radius: 8px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+    z-index: 2000;
+    min-width: 300px;
+    text-align: center;
+}
+
+/* Phase 4: Enhanced Error Message Styles */
+.error-message.retryable {
+    background: #fef2f2;
+    border: 1px solid #fecaca;
+    border-left: 4px solid #ef4444;
+    border-radius: 6px;
+    padding: 12px;
+    margin: 10px 0;
+}
+
+.error-content {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.error-text {
+    flex: 1;
+    color: #dc2626;
+    font-size: 14px;
+}
+
+.error-retry-btn, .error-dismiss-btn {
+    padding: 4px 8px;
+    border: 1px solid #d1d5db;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 12px;
+    background: white;
+}
+
+.error-retry-btn:hover {
+    background: #f3f4f6;
+    border-color: #ef4444;
+}
+
+.error-dismiss-btn:hover {
+    background: #f3f4f6;
+}
+
+/* Performance and Large Dataset Enhancements */
+.performance-warning {
+    background: #fef3c7;
+    color: #92400e;
+    padding: 12px 16px;
+    border-radius: 6px;
+    margin: 10px 0;
+    font-size: 14px;
+    border-left: 4px solid #f59e0b;
+}
+
+.large-dataset-indicator {
+    background: #e0f2fe;
+    color: #0277bd;
+    padding: 6px 10px;
+    border-radius: 4px;
+    font-size: 11px;
+    margin-left: 8px;
+}
+
+.memory-usage {
+    font-size: 10px;
+    color: #9ca3af;
+    background: #f8fafc;
+    padding: 2px 6px;
+    border-radius: 3px;
+    margin-left: 8px;
+}
+
+.performance-stats {
+    font-size: 11px;
+    color: #64748b;
+    background: #f8fafc;
+    padding: 8px 12px;
+    border-radius: 4px;
+    margin: 10px 0;
+    font-family: monospace;
+}
+
+.loading-indicator {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 16px;
+    background: #f8fafc;
+    border-radius: 6px;
+    margin: 10px 0;
+}
+
+.loading-spinner-inline {
+    width: 16px;
+    height: 16px;
+    border: 2px solid #e5e7eb;
+    border-top: 2px solid #3b82f6;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+.result-count-large {
+    font-weight: 600;
+    color: #f59e0b;
+}
+
+.result-count-normal {
+    font-weight: 500;
+    color: #059669;
+}
+
+.truncation-notice {
+    background: #fff7ed;
+    color: #ea580c;
+    padding: 8px 12px;
+    border-radius: 4px;
+    font-size: 12px;
+    margin: 5px 0;
+    border: 1px solid #fed7aa;
+}
+
+.exclusion-info {
+    margin-top: 8px;
+    padding: 6px 10px;
+    background: #f8fafc;
+    border-radius: 4px;
+    font-size: 12px;
+    color: #64748b;
+}
+
+.computed-column-badge {
+    background: #e0f2fe;
+    color: #0277bd;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-size: 10px;
+    margin-left: 4px;
+}
+
+/* Phase 4: Shortcut Help Modal Styles */
+.shortcut-help-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 3000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.shortcut-help-content {
+    background: white;
+    border-radius: 8px;
+    padding: 20px;
+    max-width: 500px;
+    max-height: 80vh;
+    overflow-y: auto;
+    position: relative;
+    z-index: 3001;
+}
+
+.shortcuts-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 8px;
+    margin: 15px 0;
+}
+
+.shortcut-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.shortcut-item kbd {
+    background: #f3f4f6;
+    border: 1px solid #d1d5db;
+    border-radius: 4px;
+    padding: 2px 6px;
+    font-family: monospace;
+    font-size: 12px;
+    min-width: 30px;
+    text-align: center;
+}
+
+.help-footer {
+    display: flex;
+    gap: 10px;
+    justify-content: flex-end;
+    margin-top: 15px;
+}
+
+.help-footer button {
+    padding: 6px 12px;
+    border: 1px solid #d1d5db;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+}
+
+/* Animations for performance feedback */
+@keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
+
+.loading-pulse {
+    animation: pulse 1.5s ease-in-out infinite;
+}
+
+/* Phase 4: Enhanced hover effects for interactive elements */
+.job-row:hover .status-shortcut {
+    background: #e2e8f0;
+    color: #475569;
+}
+
+.bulk-actions button:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.mode-btn:hover:not(.active) {
+    transform: translateY(-1px);
+}
+
+/* Phase 4: Focus states for accessibility */
+.job-row:focus-within {
+    outline: 2px solid #3b82f6;
+    outline-offset: -2px;
+}
+
+button:focus {
+    outline: 2px solid #3b82f6;
+    outline-offset: 2px;
+}
+
+input:focus, select:focus, textarea:focus {
+    outline: 2px solid #3b82f6;
+    outline-offset: 2px;
+    border-color: #3b82f6;
+}
+
+/* Responsive adjustments for large datasets */
+@media (max-width: 1200px) {
+    .stats {
+        font-size: 11px;
+        gap: 10px;
+    }
+    
+    .control-group {
+        margin-bottom: 5px;
+    }
+    
+    .modal-content {
+        width: 95%;
+        margin: 20px;
+    }
+    
+    .workflow-mode-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 10px;
+    }
+    
+    .mode-info {
+        min-width: auto;
+    }
+    
+    .workflow-stats {
+        align-self: flex-end;
+    }
+}
+
+@media (max-width: 768px) {
+    .jobs-panel {
+        width: 100%;
+    }
+    
+    .details-panel {
+        display: none;
+    }
+    
+    .main-content {
+        flex-direction: column;
+    }
+    
+    .performance-warning {
+        font-size: 12px;
+        padding: 8px 12px;
+    }
+    
+    .company-tooltip {
+        max-width: 250px;
+        font-size: 11px;
+    }
+    
+    .modal-content {
+        width: 95%;
+        max-height: 90vh;
+    }
+    
+    .workflow-control-panel {
+        padding: 10px;
+    }
+    
+    .bulk-actions-panel {
+        padding: 10px;
+    }
+    
+    .bulk-actions {
+        justify-content: center;
+    }
+    
+    .mode-selector {
+        justify-content: center;
+        width: 100%;
+    }
+    
+    .workflow-stats {
+        font-size: 12px;
+        justify-content: center;
+        width: 100%;
+    }
+}
+
+/* High contrast mode for accessibility */
+@media (prefers-contrast: high) {
+    .status-badge {
+        border: 1px solid currentColor;
+    }
+    
+    .remote-badge {
+        border: 1px solid currentColor;
+    }
+    
+    .excluded-badge {
+        border: 1px solid currentColor;
+    }
+    
+    .mode-btn {
+        border: 2px solid currentColor;
+    }
+    
+    .job-row.bulk-selected {
+        border: 2px solid #f59e0b;
+    }
+}
+
+/* Reduced motion for accessibility */
+@media (prefers-reduced-motion: reduce) {
+    .loading-spinner-inline {
+        animation: none;
+    }
+    
+    .job-row {
+        transition: none;
+    }
+    
+    .loading-pulse {
+        animation: none;
+    }
+    
+    .bulk-actions button:hover {
+        transform: none;
+        box-shadow: none;
+    }
+    
+    .mode-btn:hover:not(.active) {
+        transform: none;
+    }
+}
+
+/* Phase 4: Print styles for analytics export */
+@media print {
+    .workflow-control-panel,
+    .bulk-actions-panel,
+    .controls,
+    .details-panel {
+        display: none;
+    }
+    
+    .jobs-panel {
+        width: 100%;
+    }
+    
+    .jobs-table {
+        font-size: 11px;
+    }
+    
+    .job-row:hover {
+        background: transparent;
+    }
+    
+    .status-badge {
+        border: 1px solid currentColor;
+    }
 }
